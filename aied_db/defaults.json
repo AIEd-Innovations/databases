@@ -1,0 +1,305 @@
+{
+  "_comment": "Factory settings for every agent: the values that ship with the package. A course override or a user override wins over anything here (see aied_db/agent_config.py). Seeded into agent_config_defaults by scripts/init_db.py, which holds the admin role; no other role may write that collection. Keys beginning with _ are comments.",
+  "agents": [
+    {
+      "agent": "assessment",
+      "_comment": "Factory settings for the Assessment Agent. The three grading weights MUST sum to 1.0 (checked by AgentConfig.check_weights). manual_weight 0.1 is the 10% manual review reserved in curriculum-designer's rubric; whether review REPLACES or ADJUSTS the AI score is still an open question for the team.",
+      "settings": [
+        {
+          "key": "grading.model",
+          "value": "claude-sonnet-5-5",
+          "type": "string",
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "config.DEFAULT_MODEL. Must be one of llm/models.SUPPORTED_MODELS."
+        },
+        {
+          "key": "grading.code_weight",
+          "value": 0.6,
+          "type": "double",
+          "minimum": 0,
+          "maximum": 1,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Weight of code criteria. The three weights must sum to 1.0."
+        },
+        {
+          "key": "grading.report_weight",
+          "value": 0.3,
+          "type": "double",
+          "minimum": 0,
+          "maximum": 1,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Weight of report criteria. The three weights must sum to 1.0."
+        },
+        {
+          "key": "grading.manual_weight",
+          "value": 0.1,
+          "type": "double",
+          "minimum": 0,
+          "maximum": 1,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Weight reserved for instructor review. The three weights must sum to 1.0."
+        },
+        {
+          "key": "review.auto_flag_on_low_confidence",
+          "value": true,
+          "type": "bool",
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Whether a low-confidence grade is set to needs_review automatically."
+        }
+      ]
+    },
+    {
+      "agent": "curriculum",
+      "_comment": "Factory settings for the Curriculum Designer. Enumerations mirror curriculum-designer@93ec2c0 services/schema.py.",
+      "settings": [
+        {
+          "key": "generation.material_weight",
+          "value": "balanced",
+          "type": "string",
+          "choices": [
+            "strict",
+            "balanced",
+            "expansive"
+          ],
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "How closely a generated lab sticks to the uploaded material."
+        },
+        {
+          "key": "generation.default_difficulty",
+          "value": "intermediate",
+          "type": "string",
+          "choices": [
+            "basic",
+            "intermediate",
+            "challenge"
+          ],
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Default difficulty tier for generated quiz questions."
+        },
+        {
+          "key": "generation.estimated_duration_min",
+          "value": 60,
+          "type": "int",
+          "minimum": 5,
+          "maximum": 600,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Default estimated lab duration in minutes."
+        },
+        {
+          "key": "approval.require_instructor",
+          "value": true,
+          "type": "bool",
+          "editable_by": [
+            "admin"
+          ],
+          "description": "A generated lab needs instructor approval before students see it. An agent can never approve its own lab, so this is admin-only."
+        }
+      ]
+    },
+    {
+      "agent": "guardian",
+      "_comment": "Factory settings for the Guardian (integrity) agent. Values taken from ui-student@6f71458: the escalation threshold is the `violation_count >= 3` in agents/guardian.py, the guidance levels are GUIDANCE_INSTRUCTIONS in agents/lab_companion.py. READ-ONLY: edit this file in git, then re-seed. Instructors override per course in agent_configs.",
+      "settings": [
+        {
+          "key": "escalation.violation_threshold",
+          "value": 3,
+          "type": "int",
+          "minimum": 1,
+          "maximum": 20,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Violations in one session before it is escalated for review."
+        },
+        {
+          "key": "escalation.auto_escalate",
+          "value": true,
+          "type": "bool",
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Whether reaching the threshold escalates automatically, or only flags."
+        },
+        {
+          "key": "guidance.default_level",
+          "value": "FULL",
+          "type": "string",
+          "choices": [
+            "FULL",
+            "MODERATE",
+            "MINIMAL",
+            "REJECTED"
+          ],
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Guidance level a session starts at before any violation."
+        },
+        {
+          "key": "verification.max_retries",
+          "value": 2,
+          "type": "int",
+          "minimum": 0,
+          "maximum": 10,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "SystemConfig.verifier_max_retries: retries before the safe fallback."
+        }
+      ]
+    },
+    {
+      "agent": "integrity",
+      "_comment": "Factory settings for the Integrity agent. Thresholds are placeholders agreed with nobody yet: the task3 integrity draft does not specify them. Confirm with Rocio's team before relying on these numbers.",
+      "settings": [
+        {
+          "key": "detection.confidence_threshold",
+          "value": 0.7,
+          "type": "double",
+          "minimum": 0,
+          "maximum": 1,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Minimum confidence before an evaluation becomes a violation."
+        },
+        {
+          "key": "escalation.violation_threshold",
+          "value": 3,
+          "type": "int",
+          "minimum": 1,
+          "maximum": 20,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Violations by one student before escalation."
+        },
+        {
+          "key": "report.default_risk_level",
+          "value": "low",
+          "type": "string",
+          "choices": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "editable_by": [
+            "admin"
+          ],
+          "description": "Risk level assumed when no issues were detected."
+        }
+      ]
+    },
+    {
+      "agent": "lab_companion",
+      "_comment": "Factory settings for the Lab Companion. Values taken from ui-student@6f71458 SystemConfig's tutoring knobs and kb/base.format_context.",
+      "settings": [
+        {
+          "key": "rag.top_k",
+          "value": 3,
+          "type": "int",
+          "minimum": 1,
+          "maximum": 20,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "SystemConfig.rag_top_n: chunks retrieved per question."
+        },
+        {
+          "key": "rag.max_content_chars",
+          "value": 1000,
+          "type": "int",
+          "minimum": 100,
+          "maximum": 10000,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "SystemConfig.rag_max_content_chars: per-chunk truncation in the prompt."
+        },
+        {
+          "key": "rag.embedding_model",
+          "value": "text-embedding-3-small",
+          "type": "string",
+          "editable_by": [
+            "admin"
+          ],
+          "description": "Must stay 1536-dimensional to match the rag_vectors index."
+        },
+        {
+          "key": "chat.history_keep_turns",
+          "value": 6,
+          "type": "int",
+          "minimum": 0,
+          "maximum": 50,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "SystemConfig.history_keep_turns: turns of history sent to the model."
+        }
+      ]
+    },
+    {
+      "agent": "participant",
+      "_comment": "Factory settings for the Participant agent, which logs interaction telemetry and derives a student's hint profile.",
+      "settings": [
+        {
+          "key": "context.max_interactions",
+          "value": 50,
+          "type": "int",
+          "minimum": 1,
+          "maximum": 1000,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Most recent interactions considered when building student context."
+        },
+        {
+          "key": "context.default_hint_level",
+          "value": 1,
+          "type": "int",
+          "minimum": 0,
+          "maximum": 3,
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Hint level assumed for a student with no history yet."
+        }
+      ]
+    }
+  ]
+}
