@@ -336,6 +336,8 @@ def assessment_result(**overrides: Any) -> dict:
         },
         "status": "ai_graded",
         "review_reasons": [],
+        "regrade_of": None,
+        "regrade_instructions": "",
         "final_score": None,
         "instructor_notes": "",
         "reviewed_at": None,

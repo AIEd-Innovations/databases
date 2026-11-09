@@ -158,7 +158,7 @@ AIED_DB_ATLAS_TEST=1 MONGODB_DB=aied_smoke pytest tests/test_atlas_smoke.py -v
 
 **Live on Atlas** (MongoDB 8.0, `aied`) as of 2026-10-29. All 25 collections
 exist with current validators and their full index sets; the vector index is
-`READY` and queryable; the 22 factory settings are seeded.
+`READY` and queryable; the 26 factory settings are seeded.
 
 Verified on the real server, not just mongomock: validators reject a bad
 document, the unique indexes hold, email uniqueness and lookup are

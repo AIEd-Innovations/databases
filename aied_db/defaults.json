@@ -60,6 +60,61 @@
             "instructor"
           ],
           "description": "Whether a low-confidence grade is set to needs_review automatically."
+        },
+        {
+          "key": "feedback.tone",
+          "value": "Neutral",
+          "type": "string",
+          "choices": [
+            "Encouraging",
+            "Neutral",
+            "Direct"
+          ],
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "How the written feedback reads. assessment_agent/agent_config.py `tone`; Neutral adds nothing to the grading prompt."
+        },
+        {
+          "key": "feedback.detail",
+          "value": "Standard",
+          "type": "string",
+          "choices": [
+            "Brief",
+            "Standard",
+            "Detailed"
+          ],
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "How much the feedback says. assessment_agent/agent_config.py `feedback_detail`; Standard adds nothing to the grading prompt."
+        },
+        {
+          "key": "grading.partial_credit",
+          "value": "Balanced",
+          "type": "string",
+          "choices": [
+            "Generous",
+            "Balanced",
+            "Strict"
+          ],
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "How much credit partly correct work gets. assessment_agent/agent_config.py `partial_credit`. The one preference that changes scores; Balanced adds nothing to the grading prompt."
+        },
+        {
+          "key": "grading.notes",
+          "value": "",
+          "type": "string",
+          "editable_by": [
+            "admin",
+            "instructor"
+          ],
+          "description": "Standing instructions for every submission, within the rubric. assessment_agent/agent_config.py `notes`; the agent caps it at 4000 characters (settings have no length rule yet)."
         }
       ]
     },
