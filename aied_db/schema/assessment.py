@@ -1,4 +1,5 @@
-"""Assessment Agent collections: assignments, assignment_files, assessment_results.
+"""Assessment Agent collections: assignments, assignment_files, assessment_results,
+submission_files.
 
 Ported from AIEd-Innovations/assessment_agent @c019f0f (2026-10-26), which is
 Sean's redesign: "the agent only grades". `assignments` mirrors `spec.py`'s
@@ -6,10 +7,14 @@ Sean's redesign: "the agent only grades". `assignments` mirrors `spec.py`'s
 and `assignment_files` replaces the `solution/`, `materials/` and `originals/`
 folders that `spec.py` reads off disk.
 
+`submission_files` mirrors `submissions.py` (assessment_agent#21, 2026-11-04):
+the submitted files, kept apart from the result so a submission can be
+regraded. The result itself still holds filenames only.
+
 What is deliberately NOT here, because the redesign removed it: test cases,
-report evaluation, anomaly reports, a review queue, and the submitted text
-itself. The task3 assessment draft still describes those; it is out of date.
-If you are about to add a `test_cases` field, talk to Sean first.
+report evaluation, anomaly reports and a review queue. The task3 assessment
+draft still describes those; it is out of date. If you are about to add a
+`test_cases` field, talk to Sean first.
 
 Two rules the validator cannot enforce on its own, so they are the stores'
 and repos' job:
@@ -104,7 +109,7 @@ PROVENANCE_SCHEMA: dict[str, Any] = {
     "properties": {
         "submission_hash": {
             "bsonType": "string",
-            "description": "Hash of the submission; the text itself is not stored",
+            "description": "Hash of the submission; the text is in submission_files, not here",
         },
         "spec_hash": {"bsonType": "string", "description": "Which spec version graded it"},
         "model_id": {"bsonType": "string"},
@@ -233,7 +238,7 @@ ASSESSMENT_RESULT_SCHEMA: dict[str, Any] = {
         "files": {
             "bsonType": "array",
             "items": {"bsonType": "string"},
-            "description": "Filenames ONLY; the submitted text is never stored",
+            "description": "Filenames ONLY; the submitted text is in submission_files",
         },
         "model": {"bsonType": "string", "description": "'mock' when no API key was provided"},
         "mock": {
@@ -270,6 +275,38 @@ ASSESSMENT_RESULT_SCHEMA: dict[str, Any] = {
     },
 }
 
+SUBMITTED_FILE_SCHEMA: dict[str, Any] = {
+    "bsonType": "object",
+    "required": ["filename", "content"],
+    "additionalProperties": False,
+    "properties": {
+        "filename": {"bsonType": "string"},
+        "content": {"bsonType": "string", "description": "The file as submitted"},
+    },
+}
+
+SUBMISSION_FILE_SCHEMA: dict[str, Any] = {
+    "bsonType": "object",
+    "required": ["submission_id", "student_id", "assignment_id", "course_id", "files", "created_at"],
+    "additionalProperties": False,
+    "properties": {
+        "_id": {},
+        "submission_id": {
+            "bsonType": "string",
+            "description": "The assessment_results.submission_id these files were graded as",
+        },
+        "student_id": {"bsonType": "string"},
+        "assignment_id": {"bsonType": "string"},
+        "course_id": {"bsonType": "string"},
+        "files": {
+            "bsonType": "array",
+            "items": SUBMITTED_FILE_SCHEMA,
+            "description": "models.py SubmissionFile; what a regrade grades again",
+        },
+        "created_at": {"bsonType": "date"},
+    },
+}
+
 ASSIGNMENT_INDEXES: IndexSpec = [
     ([("course_id", 1), ("assignment_id", 1)], True, "The real primary key"),
     ([("course_id", 1), ("created_at", -1)], False, "List a course's assignments"),
@@ -291,8 +328,15 @@ ASSESSMENT_RESULT_INDEXES: IndexSpec = [
      False, "The needs_review work queue, oldest first"),
 ]
 
+SUBMISSION_FILE_INDEXES: IndexSpec = [
+    ([("submission_id", 1)], True, "One set of files per grading attempt; insert-only"),
+    ([("course_id", 1), ("student_id", 1), ("assignment_id", 1)],
+     False, "A student's submissions to one assignment"),
+]
+
 COLLECTIONS: dict[str, dict[str, Any]] = {
     "assignments": collection(ASSIGNMENT_SCHEMA, ASSIGNMENT_INDEXES),
     "assignment_files": collection(ASSIGNMENT_FILE_SCHEMA, ASSIGNMENT_FILE_INDEXES),
     "assessment_results": collection(ASSESSMENT_RESULT_SCHEMA, ASSESSMENT_RESULT_INDEXES),
+    "submission_files": collection(SUBMISSION_FILE_SCHEMA, SUBMISSION_FILE_INDEXES),
 }

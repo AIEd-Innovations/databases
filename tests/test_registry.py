@@ -1,4 +1,4 @@
-"""The registry itself: 25 collections, every one governed and documented."""
+"""The registry itself: 26 collections, every one governed and documented."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from aied_db.schema import COLLECTIONS, OWNERS, MODULES, MODULE_NAMES
 
 ROOT = Path(__file__).resolve().parent.parent
 
-EXPECTED_COLLECTION_COUNT = 25
+EXPECTED_COLLECTION_COUNT = 26
 
 
 def test_collection_count():

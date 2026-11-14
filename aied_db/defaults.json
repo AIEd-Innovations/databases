@@ -3,7 +3,7 @@
   "agents": [
     {
       "agent": "assessment",
-      "_comment": "Factory settings for the Assessment Agent. The three grading weights MUST sum to 1.0 (checked by AgentConfig.check_weights). manual_weight 0.1 is the 10% manual review reserved in curriculum-designer's rubric; whether review REPLACES or ADJUSTS the AI score is still an open question for the team.",
+      "_comment": "Factory settings for the Assessment Agent. The three grading weights MUST sum to 1.0 (checked by AgentConfig.check_weights). manual_weight 0.1 is the 10% manual review reserved in curriculum-designer's rubric; whether review REPLACES or ADJUSTS the AI score is still an open question for the team. feedback.tone, feedback.detail, grading.partial_credit and grading.notes are per-assignment preferences upstream (assessment_agent#20): instructors set them with AgentConfig.set_assignment_override, not course-wide.",
       "settings": [
         {
           "key": "grading.model",
@@ -114,7 +114,8 @@
             "admin",
             "instructor"
           ],
-          "description": "Standing instructions for every submission, within the rubric. assessment_agent/agent_config.py `notes`; the agent caps it at 4000 characters (settings have no length rule yet)."
+          "max_length": 4000,
+          "description": "Standing instructions for every submission, within the rubric. assessment_agent/agent_config.py `notes`, which has the same 4000-character cap."
         }
       ]
     },

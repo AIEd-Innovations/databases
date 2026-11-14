@@ -2,7 +2,7 @@
 
 The shared MongoDB layer for the CSU-AIEIC **Agentic Design Lab Framework**.
 
-One database (`aied`), 25 collections, each with a `$jsonSchema` validator and
+One database (`aied`), 26 collections, each with a `$jsonSchema` validator and
 its indexes. Every agent in the [AIEd-Innovations](https://github.com/AIEd-Innovations)
 org reads and writes through this package instead of its own SQLite file, JSON
 folder or Cosmos container.
@@ -75,7 +75,7 @@ tests/            382 tests: mongomock, a $jsonSchema checker, SQLite parity
 | `curriculum` | labs, lab_files |
 | `participant_guardian` | interactions, guardian_sessions, guardian_questions, guardian_violations, guardian_verifications |
 | `lab_companion` | rag_documents, rag_vectors, student_files, rag_queries |
-| `assessment` | assignments, assignment_files, assessment_results |
+| `assessment` | assignments, assignment_files, assessment_results, submission_files |
 | `integrity` | integrity_sessions, integrity_records, integrity_violations, integrity_escalations, integrity_reports |
 | `platform` | revisions, agent_config_defaults, agent_configs |
 
@@ -158,7 +158,13 @@ AIED_DB_ATLAS_TEST=1 MONGODB_DB=aied_smoke pytest tests/test_atlas_smoke.py -v
 
 **Live on Atlas** (MongoDB 8.0, `aied`) as of 2026-10-29. All 25 collections
 exist with current validators and their full index sets; the vector index is
-`READY` and queryable; the 26 factory settings are seeded.
+`READY` and queryable; the 22 factory settings are seeded.
+
+**Not yet applied to Atlas:** the regrade fields on `assessment_results`, the
+new `submission_files` collection, the `assignment` settings scope (which
+replaces one `agent_configs` unique index) and the 4 new assessment settings.
+Run `python scripts/init_db.py` with cluster access to apply them; it drops the
+superseded index itself.
 
 Verified on the real server, not just mongomock: validators reject a bad
 document, the unique indexes hold, email uniqueness and lookup are

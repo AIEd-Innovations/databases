@@ -16,7 +16,7 @@ from aied_db.agent_config import (
     seed_defaults,
 )
 
-from .factories import COURSE_ID, INSTRUCTOR_ID, STUDENT_ID
+from .factories import COURSE_ID, FACTORIES, INSTRUCTOR_ID, STUDENT_ID
 
 AGENT = "guardian"
 KEY = "escalation.violation_threshold"
@@ -159,6 +159,99 @@ def test_one_courses_override_does_not_leak_into_another(seeded, instructor_db):
     )
     other = AgentConfig(seeded, AGENT, course_id="course-other")
     assert other.get(KEY) == 3
+
+
+ASSESSMENT = "assessment"
+TONE = "feedback.tone"
+
+
+def test_assignment_override_applies_to_that_assignment_only(seeded, instructor_db):
+    """assessment_agent#20 keeps grading preferences per assignment."""
+    AgentConfig(instructor_db, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1").set_assignment_override(
+        TONE, "Direct", set_by=INSTRUCTOR_ID, role="instructor"
+    )
+    hw1 = AgentConfig(seeded, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1")
+    assert hw1.get(TONE) == "Direct"
+    assert hw1.resolve()[TONE].source == "assignment"
+    assert AgentConfig(seeded, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw2").get(TONE) == "Neutral"
+    assert AgentConfig(seeded, ASSESSMENT, course_id=COURSE_ID).get(TONE) == "Neutral"
+    assert AgentConfig(seeded, ASSESSMENT, course_id="course-other", assignment_id="hw1").get(TONE) == "Neutral"
+
+
+def test_assignment_beats_course_and_user_beats_assignment(seeded, instructor_db, admin_db):
+    AgentConfig(instructor_db, ASSESSMENT, course_id=COURSE_ID).set_course_override(
+        TONE, "Encouraging", set_by=INSTRUCTOR_ID, role="instructor"
+    )
+    AgentConfig(instructor_db, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1").set_assignment_override(
+        TONE, "Direct", set_by=INSTRUCTOR_ID, role="instructor"
+    )
+    assert AgentConfig(seeded, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1").get(TONE) == "Direct"
+    assert AgentConfig(seeded, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw2").get(TONE) == "Encouraging"
+
+    AgentConfig(admin_db, ASSESSMENT, course_id=COURSE_ID, user_id=INSTRUCTOR_ID).set_user_override(
+        TONE, "Neutral", set_by=INSTRUCTOR_ID, role="admin"
+    )
+    mine = AgentConfig(seeded, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1", user_id=INSTRUCTOR_ID)
+    assert mine.resolve()[TONE].source == "user"
+
+
+def test_two_assignments_can_each_override_the_same_key(seeded, instructor_db, db):
+    for assignment_id, tone in (("hw1", "Direct"), ("hw2", "Encouraging")):
+        config = AgentConfig(instructor_db, ASSESSMENT, course_id=COURSE_ID, assignment_id=assignment_id)
+        config.set_assignment_override(TONE, tone, set_by=INSTRUCTOR_ID, role="instructor")
+        config.set_assignment_override(TONE, tone, set_by=INSTRUCTOR_ID, role="instructor")
+    assert db["agent_configs"].count_documents({"key": TONE}) == 2
+    assert AgentConfig(seeded, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw2").get(TONE) == "Encouraging"
+
+
+def test_an_assignment_override_needs_an_assignment_and_its_course(seeded, instructor_db):
+    with pytest.raises(ConfigError, match="assignment_id"):
+        AgentConfig(instructor_db, ASSESSMENT, course_id=COURSE_ID).set_assignment_override(
+            TONE, "Direct", set_by=INSTRUCTOR_ID, role="instructor"
+        )
+    with pytest.raises(ConfigError, match="course_id"):
+        AgentConfig(instructor_db, ASSESSMENT, assignment_id="hw1")
+
+
+def test_a_student_cannot_set_an_assignment_preference(seeded, student_db):
+    with pytest.raises(ConfigError, match="editable by"):
+        AgentConfig(student_db, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1").set_assignment_override(
+            TONE, "Direct", set_by=STUDENT_ID, role="student"
+        )
+
+
+def test_assignment_choices_are_enforced(seeded, instructor_db):
+    config = AgentConfig(instructor_db, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1")
+    with pytest.raises(ConfigError, match="must be one of"):
+        config.set_assignment_override(TONE, "Snarky", set_by=INSTRUCTOR_ID, role="instructor")
+
+
+def test_grading_notes_are_capped_at_4000_characters_like_the_agent(seeded, instructor_db):
+    config = AgentConfig(instructor_db, ASSESSMENT, course_id=COURSE_ID, assignment_id="hw1")
+    config.set_assignment_override("grading.notes", "x" * 4000, set_by=INSTRUCTOR_ID, role="instructor")
+    with pytest.raises(ConfigError, match="at most 4000 characters"):
+        config.set_assignment_override("grading.notes", "x" * 4001, set_by=INSTRUCTOR_ID, role="instructor")
+
+
+def test_a_student_can_still_set_their_own_override(seeded, db):
+    """The tighter student policy must not break set_user_override itself."""
+    student = guarded(db, Role.STUDENT, actor_id=STUDENT_ID)
+    defaults = guarded(db, Role.ADMIN, actor_id="test-admin")
+    defaults["agent_config_defaults"].update_one(
+        {"agent": AGENT, "key": KEY}, {"$set": {"editable_by": ["admin", "instructor", "student"]}}
+    )
+    config = AgentConfig(student, AGENT, course_id=COURSE_ID, user_id=STUDENT_ID)
+    config.set_user_override(KEY, 4, set_by=STUDENT_ID, role="student")
+    config.set_user_override(KEY, 6, set_by=STUDENT_ID, role="student")
+    assert config.get(KEY) == 6
+    assert db["agent_configs"].count_documents({"user_id": STUDENT_ID}) == 1
+
+
+def test_overrides_written_before_assignment_id_existed_still_resolve(seeded, db):
+    """Live documents have no assignment_id field; they must keep working."""
+    db["agent_configs"].insert_one(FACTORIES["agent_configs"]())  # no assignment_id
+    assert AgentConfig(seeded, AGENT, course_id=COURSE_ID).get(KEY) == 5
+    assert AgentConfig(seeded, AGENT, course_id=COURSE_ID, assignment_id="hw1").get(KEY) == 5
 
 
 def test_resetting_an_override_updates_it_in_place(seeded, instructor_db, db):

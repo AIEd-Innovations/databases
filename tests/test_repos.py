@@ -288,6 +288,73 @@ def test_a_regrade_records_what_it_regrades_and_why(agent_repo):
     assert first["regrade_instructions"] == ""
 
 
+def test_submitted_files_are_kept_for_a_regrade(agent_repo, instructor_repo):
+    files = [{"filename": "main.py", "content": "print('hi')\n"}]
+    agent_repo.insert_result(FACTORIES["assessment_results"](), submitted_files=files)
+    assert agent_repo.get_submitted_files("sub-001") == files
+    assert instructor_repo.get_submitted_files("sub-001") == files
+    # The result still carries filenames only; the content is not on it.
+    assert "content" not in str(agent_repo.get_result("sub-001")["files"])
+
+
+def test_a_result_stored_without_its_files_cannot_be_regraded(agent_repo):
+    """Upstream's regrade answers 409 for these; None is that signal."""
+    agent_repo.insert_result(FACTORIES["assessment_results"]())
+    assert agent_repo.get_submitted_files("sub-001") is None
+    assert agent_repo.get_submitted_files("no-such-submission") is None
+
+
+def test_submitted_files_are_insert_only_and_hidden_from_students(db, agent_repo, course_id):
+    agent_repo.insert_result(FACTORIES["assessment_results"](), submitted_files=[
+        {"filename": "main.py", "content": "x = 1\n"}
+    ])
+    agent = guarded(db, Role.ASSESSMENT_AGENT, actor_id="assessment_agent")
+    with pytest.raises(PermissionError_):
+        agent["submission_files"].update_one({"submission_id": "sub-001"}, {"$set": {"files": []}})
+    with pytest.raises(PermissionError_):
+        agent["submission_files"].delete_one({"submission_id": "sub-001"})
+    with pytest.raises(PermissionError_):
+        guarded(db, Role.INSTRUCTOR, actor_id=INSTRUCTOR_ID)["submission_files"].delete_one({})
+    student = AssessmentRepo(guarded(db, Role.STUDENT, actor_id=STUDENT_ID), course_id=course_id)
+    with pytest.raises(PermissionError_):
+        student.get_submitted_files("sub-001")
+
+
+def test_submitted_files_are_scoped_to_the_course(db, agent_repo):
+    agent_repo.insert_result(FACTORIES["assessment_results"](), submitted_files=[
+        {"filename": "main.py", "content": "x = 1\n"}
+    ])
+    other = AssessmentRepo(
+        guarded(db, Role.ASSESSMENT_AGENT, actor_id="assessment_agent"), course_id="course-other"
+    )
+    assert other.get_submitted_files("sub-001") is None
+
+
+def test_latest_keeps_each_students_current_grade(agent_repo):
+    result = FACTORIES["assessment_results"]
+    agent_repo.insert_result(result(submission_id="a1", student_id="stu-a"))
+    agent_repo.insert_result(result(submission_id="b1", student_id="stu-b"))
+    agent_repo.insert_result(result(submission_id="a2", student_id="stu-a", regrade_of="a1"))
+    agent_repo.insert_result(result(submission_id="a-hw2", student_id="stu-a", assignment_id="hw2"))
+
+    assert len(agent_repo.list_results()) == 4
+    latest = agent_repo.list_results(latest=True)
+    assert sorted(r["submission_id"] for r in latest) == ["a-hw2", "a2", "b1"]
+    assert [r["submission_id"] for r in agent_repo.list_results(latest=True, student_id="stu-a",
+                                                                  assignment_id="hw1_sorting")] == ["a2"]
+
+
+def test_latest_applies_before_the_status_filter(agent_repo):
+    """As upstream: a needs_review grade a regrade superseded is not current."""
+    result = FACTORIES["assessment_results"]
+    agent_repo.insert_result(result(submission_id="a1", student_id="stu-a", status="needs_review"))
+    agent_repo.insert_result(result(submission_id="a2", student_id="stu-a", status="ai_graded"))
+    agent_repo.insert_result(result(submission_id="b1", student_id="stu-b", status="needs_review"))
+
+    assert [r["submission_id"] for r in agent_repo.list_results(status="needs_review", latest=True)] == ["b1"]
+    assert sorted(r["submission_id"] for r in agent_repo.list_results(status="needs_review")) == ["a1", "b1"]
+
+
 # ── Integrity ────────────────────────────────────────────────────────────────
 
 
