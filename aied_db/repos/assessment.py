@@ -16,6 +16,7 @@ service is a matter of replacing `persistence.append_json` / `read_json` /
     POST   /submit, /submit-json                      -> insert_result
     GET    /results                                   -> list_results
     GET    /results/{submission_id}                   -> get_result
+    POST   /results/{submission_id}/regrade           -> get_submitted_files, then insert_result
     POST   /results/{submission_id}/review            -> review_result
     GET    /results/{submission_id}/provenance        -> get_provenance
 
@@ -273,13 +274,32 @@ class AssessmentRepo:
         return result.deleted_count > 0
 
     # -------------------------------------------------------------- results
-    def insert_result(self, result: dict) -> dict:
+    def insert_result(self, result: dict, submitted_files: Optional[list[dict]] = None) -> dict:
         """POST /submit — record one grading attempt. INSERT-ONLY.
 
         A regrade is a new `submission_id` with `regrade_of` pointing at the one it regrades,
         never an edit of this document.
-        The submitted text is not stored: `files` holds filenames only.
+
+        `submitted_files` is `[{"filename", "content"}, ...]`, as upstream's
+        `_save_result(result, files)` receives them. They go to
+        `submission_files`, not onto the result, so result reads stay small;
+        `get_submitted_files` returns them for a regrade. Omit them and that
+        result cannot be regraded, as upstream for results graded before #21.
         """
+        if submitted_files is not None:
+            self._db["submission_files"].insert_one(
+                {
+                    "submission_id": result["submission_id"],
+                    "student_id": result["student_id"],
+                    "assignment_id": result["assignment_id"],
+                    "course_id": self._course_id,
+                    "files": [
+                        {"filename": f["filename"], "content": f["content"]}
+                        for f in submitted_files
+                    ],
+                    "created_at": now(),
+                }
+            )
         document = {
             "submission_id": result["submission_id"],
             "student_id": result["student_id"],
@@ -311,17 +331,38 @@ class AssessmentRepo:
         student_id: Optional[str] = None,
         assignment_id: Optional[str] = None,
         status: Optional[str] = None,
+        latest: bool = False,
     ) -> list[dict]:
-        """GET /results — the same three optional filters as the route."""
+        """GET /results — the same optional filters as the route, newest first.
+
+        `latest=True` keeps only the newest result for each student and
+        assignment: their current grade. As upstream, that is decided BEFORE
+        `status` filters, so `status="needs_review", latest=True` is the
+        students whose current grade needs review — not each student's newest
+        needs_review result, which a later regrade may have superseded.
+        """
         query = self._scope()
         if student_id:
             query["student_id"] = student_id
         if assignment_id:
             query["assignment_id"] = assignment_id
-        if status:
+        if status and not latest:
             query["status"] = status
-        cursor = self._db["assessment_results"].find(query).sort("created_at", -1)
-        return [self._result_row(document) for document in cursor]
+        # _id breaks created_at ties (same millisecond) in insertion order.
+        cursor = self._db["assessment_results"].find(query).sort(
+            [("created_at", -1), ("_id", -1)]
+        )
+        documents = list(cursor)
+        if latest:
+            seen: set[tuple[str, str]] = set()
+            newest = []
+            for document in documents:
+                key = (document["student_id"], document["assignment_id"])
+                if key not in seen:
+                    seen.add(key)
+                    newest.append(document)
+            documents = [d for d in newest if not status or d.get("status") == status]
+        return [self._result_row(document) for document in documents]
 
     def get_result(self, submission_id: str) -> Optional[dict]:
         """GET /results/{submission_id}."""
@@ -330,6 +371,18 @@ class AssessmentRepo:
                 self._scope(submission_id=submission_id)
             )
         )
+
+    def get_submitted_files(self, submission_id: str) -> Optional[list[dict]]:
+        """The files graded as `submission_id`, or None if they were not stored.
+
+        Upstream's `submissions.load_files`. None means the regrade route
+        answers 409 ("resubmit to grade it again"). Instructors and the agent
+        only; there is no student-facing form.
+        """
+        document = self._db["submission_files"].find_one(
+            self._scope(submission_id=submission_id)
+        )
+        return None if document is None else [dict(f) for f in document["files"]]
 
     def review_result(
         self,

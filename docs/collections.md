@@ -2,7 +2,7 @@
 
 # Collections
 
-The `aied` database: 25 collections, each with a `$jsonSchema` validator
+The `aied` database: 26 collections, each with a `$jsonSchema` validator
 and its indexes. Validation level is `moderate` by default — existing
 documents are left alone, new and changed ones are checked.
 
@@ -16,7 +16,7 @@ each collection's policy table is generated from `POLICY` in
 | `curriculum` | [lab_files](#lab_files), [labs](#labs) |
 | `participant_guardian` | [guardian_questions](#guardian_questions), [guardian_sessions](#guardian_sessions), [guardian_verifications](#guardian_verifications), [guardian_violations](#guardian_violations), [interactions](#interactions) |
 | `lab_companion` | [rag_documents](#rag_documents), [rag_queries](#rag_queries), [rag_vectors](#rag_vectors), [student_files](#student_files) |
-| `assessment` | [assessment_results](#assessment_results), [assignment_files](#assignment_files), [assignments](#assignments) |
+| `assessment` | [assessment_results](#assessment_results), [assignment_files](#assignment_files), [assignments](#assignments), [submission_files](#submission_files) |
 | `integrity` | [integrity_escalations](#integrity_escalations), [integrity_records](#integrity_records), [integrity_reports](#integrity_reports), [integrity_sessions](#integrity_sessions), [integrity_violations](#integrity_violations) |
 | `platform` | [agent_config_defaults](#agent_config_defaults), [agent_configs](#agent_configs), [revisions](#revisions) |
 
@@ -552,7 +552,7 @@ each collection's policy table is generated from `POLICY` in
 | `student_id` | string | yes |  |  |
 | `assignment_id` | string | yes |  |  |
 | `course_id` | string | yes |  |  |
-| `files` | array<string> | yes |  | Filenames ONLY; the submitted text is never stored |
+| `files` | array<string> | yes |  | Filenames ONLY; the submitted text is in submission_files |
 | `model` | string | yes |  | 'mock' when no API key was provided |
 | `mock` | bool | yes |  | True when graded offline by the mock model: not a real assessment |
 | `criteria` | array<object> | yes |  |  |
@@ -578,7 +578,7 @@ each collection's policy table is generated from `POLICY` in
 | `reviewed_at` | date \\| null |  |  |  |
 | `created_at` | date | yes |  |  |
 | `provenance` | object \\| null |  |  |  |
-| `provenance.submission_hash` | string |  |  | Hash of the submission; the text itself is not stored |
+| `provenance.submission_hash` | string |  |  | Hash of the submission; the text is in submission_files, not here |
 | `provenance.spec_hash` | string |  |  | Which spec version graded it |
 | `provenance.model_id` | string |  |  |  |
 | `provenance.llm_calls` | array<object> |  |  |  |
@@ -678,6 +678,35 @@ each collection's policy table is generated from `POLICY` in
 | `student` | find | all |
 | `curriculum_agent` | find, insert | all |
 | `assessment_agent` | find | all |
+| `migration` | find, insert | all |
+
+### submission_files
+
+| Field | Type | Required | Constraints | Notes |
+| --- | --- | --- | --- | --- |
+| `submission_id` | string | yes |  | The assessment_results.submission_id these files were graded as |
+| `student_id` | string | yes |  |  |
+| `assignment_id` | string | yes |  |  |
+| `course_id` | string | yes |  |  |
+| `files` | array<object> | yes |  | models.py SubmissionFile; what a regrade grades again |
+| `files[].filename` | string |  |  |  |
+| `files[].content` | string |  |  | The file as submitted |
+| `created_at` | date | yes |  |  |
+
+**Indexes**
+
+| Keys | Unique | Purpose |
+| --- | --- | --- |
+| `submission_id_1` | yes | One set of files per grading attempt; insert-only |
+| `course_id_1_student_id_1_assignment_id_1` |  | A student's submissions to one assignment |
+
+**Access**
+
+| Role | May | Updatable fields |
+| --- | --- | --- |
+| `admin` | delete, find, insert, replace, update | all |
+| `instructor` | find | all |
+| `assessment_agent` | find, insert | all |
 | `migration` | find, insert | all |
 
 ## integrity
@@ -853,6 +882,7 @@ each collection's policy table is generated from `POLICY` in
 | `choices` | array \\| null |  |  | When set, an override must be one of these |
 | `minimum` | double \\| int \\| null |  |  |  |
 | `maximum` | double \\| int \\| null |  |  |  |
+| `max_length` | int \\| null |  | `>= 0` | For a string setting: the longest override allowed |
 | `editable_by` | array<enum(admin, instructor, student, nobody)> | yes |  | Who may override it. Empty or ['nobody'] means fixed |
 | `description` | string |  |  |  |
 | `source_file` | string \\| null |  |  | The defaults file this was seeded from |
@@ -884,11 +914,12 @@ each collection's policy table is generated from `POLICY` in
 | Field | Type | Required | Constraints | Notes |
 | --- | --- | --- | --- | --- |
 | `config_id` | string | yes |  | UUID4 |
-| `scope` | enum(course, user) | yes |  | 'course' is the instructor's; 'user' is personal |
+| `scope` | enum(course, assignment, user) | yes |  | 'course' and 'assignment' are the instructor's; 'user' is personal |
 | `agent` | string | yes |  |  |
 | `key` | string | yes |  | Must exist in agent_config_defaults |
 | `value` | any | yes |  | Checked against the default's type/choices/min/max |
-| `course_id` | string \\| null |  |  | Required when scope is 'course'; the course a user override applies to |
+| `course_id` | string \\| null |  |  | Required when scope is 'course' or 'assignment'; the course a user override applies to |
+| `assignment_id` | string \\| null |  |  | Required when scope is 'assignment' (assignments.assignment_id); null or absent otherwise |
 | `user_id` | string \\| null |  |  | Required when scope is 'user' |
 | `set_by` | string | yes |  | users.id of whoever set it |
 | `updated_at` | date | yes |  |  |
@@ -898,7 +929,7 @@ each collection's policy table is generated from `POLICY` in
 | Keys | Unique | Purpose |
 | --- | --- | --- |
 | `config_id_1` | yes | Primary key |
-| `scope_1_course_id_1_user_id_1_agent_1_key_1` | yes | One override per setting per scope — re-setting updates in place |
+| `scope_1_course_id_1_assignment_id_1_user_id_1_agent_1_key_1` | yes | One override per setting per scope — re-setting updates in place |
 | `agent_1_key_1` |  | Who has overridden a given setting |
 
 **Access**
@@ -907,7 +938,7 @@ each collection's policy table is generated from `POLICY` in
 | --- | --- | --- |
 | `admin` | delete, find, insert, replace, update | all |
 | `instructor` | delete, find, insert, replace, update | all |
-| `student` | delete, find, insert, replace, update | all |
+| `student` | delete, find, insert, replace, update | `config_id`, `set_by`, `updated_at`, `value` |
 | `curriculum_agent` | find | all |
 | `assessment_agent` | find | all |
 | `participant_agent` | find | all |
