@@ -28,3 +28,26 @@ def test_sso_subject_is_unique_only_when_set():
     assert INDEX_OPTIONS["users"]["sso_subject_1"] == {
         "partialFilterExpression": {"sso_subject": {"$type": "string"}}
     }
+
+
+def test_init_drops_the_retired_agent_configs_index_and_nothing_else(raw_db, monkeypatch):
+    """The old unique index lacks assignment_id; left in place it would refuse
+    a second assignment's override of the same key."""
+    from aied_db import schema
+
+    old = "scope_1_course_id_1_user_id_1_agent_1_key_1"
+    assert old in schema.RETIRED_INDEXES["agent_configs"]
+    raw_db["agent_configs"].create_index(
+        [("scope", 1), ("course_id", 1), ("user_id", 1), ("agent", 1), ("key", 1)], unique=True
+    )
+    raw_db["agent_configs"].create_index([("unrelated", 1)])
+    # mongomock has no collMod; the validator is not what this test is about.
+    monkeypatch.setattr(raw_db, "command", lambda *a, **k: {"ok": 1})
+
+    schema.ensure_collection(raw_db, "agent_configs")
+    names = {index["name"] for index in raw_db["agent_configs"].list_indexes()}
+    assert old not in names
+    assert "unrelated_1" in names
+    assert index_name(COLLECTIONS["agent_configs"]["indexes"][1][0]) in names
+
+    schema.ensure_collection(raw_db, "agent_configs")  # idempotent once it is gone

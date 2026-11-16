@@ -49,7 +49,10 @@ silently re-grades.
 
 It describes test cases, report evaluation, anomaly reports, a review queue
 and stored submission text. Sean's Oct 26 redesign removed all of them: the
-agent only grades.
+agent only grades. Stored submission text has since come back for one reason:
+assessment_agent#21 keeps the submitted files so a submission can be regraded.
+They live in `submission_files`, apart from the result, readable by
+instructors and the agent but not students.
 
 **Where it stands:** `schema/assessment.py` follows the code on `main`, as
 decided. Review is a *status* on the result (`needs_review` ->

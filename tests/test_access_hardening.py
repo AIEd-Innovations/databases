@@ -116,9 +116,44 @@ def test_student_writes_are_confined_to_their_own_documents(db, admin_db):
 def test_student_settings_must_be_their_own(db):
     me = guarded(db, Role.STUDENT, "stu-1")
     with pytest.raises(PermissionError_, match="user_id"):
-        me["agent_configs"].insert_one(FACTORIES["agent_configs"](user_id=None))
+        me["agent_configs"].insert_one(FACTORIES["agent_configs"](scope="user", user_id=None))
     with pytest.raises(PermissionError_, match="user_id"):
-        me["agent_configs"].update_one({"user_id": "stu-9"}, {"$set": {"value": 1}}, upsert=True)
+        me["agent_configs"].update_one(
+            {"scope": "user", "user_id": "stu-9"}, {"$set": {"value": 1}}, upsert=True
+        )
+
+
+@pytest.mark.parametrize("scope", ["course", "assignment"])
+def test_a_student_cannot_create_a_course_or_assignment_override(db, scope):
+    """Their own user_id on it is not enough: it would change the setting for everyone."""
+    me = guarded(db, Role.STUDENT, "stu-1")
+    with pytest.raises(PermissionError_, match="scope"):
+        me["agent_configs"].insert_one(
+            FACTORIES["agent_configs"](scope=scope, user_id="stu-1", assignment_id="hw1")
+        )
+    with pytest.raises(PermissionError_, match="scope"):
+        me["agent_configs"].update_one(
+            {"scope": scope, "user_id": "stu-1", "agent": "guardian", "key": "k"},
+            {"$set": {"value": 1}},
+            upsert=True,
+        )
+    with pytest.raises(PermissionError_, match="scope"):
+        me["agent_configs"].replace_one(
+            {"config_id": "config-001"},
+            FACTORIES["agent_configs"](scope=scope, user_id="stu-1"),
+            upsert=True,
+        )
+    assert db["agent_configs"].count_documents({}) == 0
+
+
+def test_a_student_cannot_move_their_override_to_another_scope(db):
+    me = guarded(db, Role.STUDENT, "stu-1")
+    me["agent_configs"].insert_one(FACTORIES["agent_configs"](scope="user", user_id="stu-1"))
+    for field, value in (("scope", "course"), ("assignment_id", "hw1"), ("course_id", "other")):
+        with pytest.raises(PermissionError_, match="may only update"):
+            me["agent_configs"].update_one({"user_id": "stu-1"}, {"$set": {field: value}})
+    me["agent_configs"].update_one({"user_id": "stu-1"}, {"$set": {"value": 7}})
+    assert db["agent_configs"].find_one({"user_id": "stu-1"})["scope"] == "user"
 
 
 # ── revisions ────────────────────────────────────────────────────────────────

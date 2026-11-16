@@ -443,6 +443,18 @@ def revision(**overrides: Any) -> dict:
     }
 
 
+def submission_file(**overrides: Any) -> dict:
+    return {
+        "submission_id": "sub-001",
+        "student_id": STUDENT_ID,
+        "assignment_id": "hw1_sorting",
+        "course_id": COURSE_ID,
+        "files": [{"filename": "solution.py", "content": "def sort(xs):\n    return sorted(xs)\n"}],
+        "created_at": now(),
+        **overrides,
+    }
+
+
 def agent_config_default(**overrides: Any) -> dict:
     return {
         "agent": "guardian",
@@ -494,6 +506,7 @@ FACTORIES: dict[str, Callable[..., dict]] = {
     "assignments": assignment,
     "assignment_files": assignment_file,
     "assessment_results": assessment_result,
+    "submission_files": submission_file,
     "integrity_sessions": integrity_session,
     "integrity_records": integrity_record,
     "integrity_violations": integrity_violation,

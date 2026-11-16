@@ -68,7 +68,7 @@ def test_the_copy_says_where_it_came_from():
 
 
 def test_the_copy_does_not_carry_upstreams_apply_functions():
-    """Applying the schema is `aied_db.schema.ensure_all`'s job, for all 25."""
+    """Applying the schema is `aied_db.schema.ensure_all`'s job, for all 26."""
     for name in ("ensure_all", "ensure_collection", "validator_for"):
         assert not hasattr(curriculum, name), f"curriculum.py should not define {name}"
 

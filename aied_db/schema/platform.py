@@ -10,10 +10,11 @@ is enforced in `access.POLICY`, and the Atlas custom roles grant only
 
 SETTINGS CASCADE. `agent_config_defaults` is seeded from the read-only
 `aied_db/defaults.json` file and is itself read-only at runtime. Overrides
-live in `agent_configs`: an instructor may set one course-wide, a user may
-set one for themselves. `agent_config.AgentConfig` resolves
-defaults -> course -> user, and before login resolves only defaults -> course.
-Each key carries its own `editable_by` plus type/choices/min/max, so the
+live in `agent_configs`: an instructor may set one course-wide or for one
+assignment, a user may set one for themselves. `agent_config.AgentConfig`
+resolves defaults -> course -> assignment -> user, and before login resolves
+only defaults -> course -> assignment.
+Each key carries its own `editable_by` plus type/choices/min/max/max_length, so the
 checks travel with the setting rather than living in each agent.
 """
 
@@ -26,7 +27,7 @@ from ._common import IndexSpec, collection, nullable
 ACTIONS = ["update", "replace", "delete"]
 VALUE_TYPES = ["string", "int", "double", "bool", "array", "object"]
 EDITABLE_BY = ["admin", "instructor", "student", "nobody"]
-SCOPES = ["course", "user"]
+SCOPES = ["course", "assignment", "user"]
 
 REVISION_SCHEMA: dict[str, Any] = {
     "bsonType": "object",
@@ -74,6 +75,11 @@ AGENT_CONFIG_DEFAULT_SCHEMA: dict[str, Any] = {
         },
         "minimum": {"bsonType": ["double", "int", "null"]},
         "maximum": {"bsonType": ["double", "int", "null"]},
+        "max_length": {
+            "bsonType": ["int", "null"],
+            "minimum": 0,
+            "description": "For a string setting: the longest override allowed",
+        },
         "editable_by": {
             "bsonType": "array",
             "items": {"enum": EDITABLE_BY},
@@ -95,13 +101,22 @@ AGENT_CONFIG_SCHEMA: dict[str, Any] = {
     "properties": {
         "_id": {},
         "config_id": {"bsonType": "string", "description": "UUID4"},
-        "scope": {"enum": SCOPES, "description": "'course' is the instructor's; 'user' is personal"},
+        "scope": {
+            "enum": SCOPES,
+            "description": "'course' and 'assignment' are the instructor's; 'user' is personal",
+        },
         "agent": {"bsonType": "string"},
         "key": {"bsonType": "string", "description": "Must exist in agent_config_defaults"},
         "value": {"description": "Checked against the default's type/choices/min/max"},
         "course_id": {
             "bsonType": nullable("string"),
-            "description": "Required when scope is 'course'; the course a user override applies to",
+            "description": "Required when scope is 'course' or 'assignment'; "
+                           "the course a user override applies to",
+        },
+        "assignment_id": {
+            "bsonType": nullable("string"),
+            "description": "Required when scope is 'assignment' (assignments.assignment_id); "
+                           "null or absent otherwise",
         },
         "user_id": {"bsonType": nullable("string"), "description": "Required when scope is 'user'"},
         "set_by": {"bsonType": "string", "description": "users.id of whoever set it"},
@@ -122,10 +137,18 @@ AGENT_CONFIG_DEFAULT_INDEXES: IndexSpec = [
 
 AGENT_CONFIG_INDEXES: IndexSpec = [
     ([("config_id", 1)], True, "Primary key"),
-    ([("scope", 1), ("course_id", 1), ("user_id", 1), ("agent", 1), ("key", 1)],
+    ([("scope", 1), ("course_id", 1), ("assignment_id", 1), ("user_id", 1), ("agent", 1), ("key", 1)],
      True, "One override per setting per scope — re-setting updates in place"),
     ([("agent", 1), ("key", 1)], False, "Who has overridden a given setting"),
 ]
+
+#: Indexes an earlier version created that the current one replaces.
+#: `ensure_collection` drops these by name; it never drops anything else.
+RETIRED_INDEXES: dict[str, list[str]] = {
+    # Superseded when the 'assignment' scope added assignment_id. Left in
+    # place, it would refuse a second assignment's override of the same key.
+    "agent_configs": ["scope_1_course_id_1_user_id_1_agent_1_key_1"],
+}
 
 COLLECTIONS: dict[str, dict[str, Any]] = {
     "revisions": collection(REVISION_SCHEMA, REVISION_INDEXES),

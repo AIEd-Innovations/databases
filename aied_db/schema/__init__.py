@@ -79,6 +79,12 @@ INDEX_OPTIONS: dict[str, dict[str, dict[str, Any]]] = {}
 for _module in MODULES:
     INDEX_OPTIONS.update(getattr(_module, "INDEX_OPTIONS", {}))
 
+#: Index names an earlier version created and the current one replaces, by
+#: collection. `ensure_collection` drops exactly these and nothing else.
+RETIRED_INDEXES: dict[str, list[str]] = {}
+for _module in MODULES:
+    RETIRED_INDEXES.update(getattr(_module, "RETIRED_INDEXES", {}))
+
 #: Atlas Search / Vector Search indexes, which are not ordinary indexes.
 SEARCH_INDEXES: dict[str, list[dict[str, Any]]] = {}
 for _module in MODULES:
@@ -116,6 +122,15 @@ def ensure_collection(
     else:
         db.create_collection(name, validator=validator, validationLevel=validation_level)
         action = "created"
+
+    # Retired indexes go first: a superseded unique index would otherwise go
+    # on refusing documents the new one allows.
+    retired = RETIRED_INDEXES.get(name, [])
+    if retired:
+        existing = {index["name"] for index in db[name].list_indexes()}
+        for index in retired:
+            if index in existing:
+                db[name].drop_index(index)
 
     options = INDEX_OPTIONS.get(name, {})
     for keys, unique, _why in COLLECTIONS[name]["indexes"]:
@@ -186,6 +201,7 @@ __all__ = [
     "COLLECTIONS",
     "OWNERS",
     "INDEX_OPTIONS",
+    "RETIRED_INDEXES",
     "SEARCH_INDEXES",
     "MODULES",
     "MODULE_NAMES",

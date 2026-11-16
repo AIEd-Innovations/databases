@@ -125,6 +125,18 @@ One method per route you already have. **Student-facing reads must pass
 Reference solutions live in `assignment_files` with `kind: "solution"`, and
 students have no access to that collection at all.
 
+Your `submissions.py` files map onto `submission_files`. Pass the submitted
+files to `insert_result` wherever `_save_result(result, files)` runs today, and
+read them back for a regrade with `get_submitted_files` (`None` is your 409):
+
+```python
+repo.insert_result(result.model_dump(), submitted_files=[f.model_dump() for f in files])
+files = repo.get_submitted_files(submission_id)
+```
+
+`GET /results?latest=true` is `list_results(latest=True)`, filtered in the same
+order as your route.
+
 ### curriculum-designer
 
 You are already on this cluster through your own `services/storage.py`, and
@@ -205,13 +217,23 @@ Field-by-field tables, including who can write what, are in
 
 Thresholds and model names come from the database, so an instructor can
 change them without a deploy. Defaults cascade: shipped default, then course
-override, then user override.
+override, then assignment override, then user override.
 
 ```python
 from aied_db import AgentConfig
 
 config = AgentConfig(db, agent="guardian", course_id=course_id, user_id=student_id)
 threshold = config.get("escalation.violation_threshold")  # 3 unless overridden
+```
+
+The assessment agent's grading preferences (`feedback.tone`,
+`feedback.detail`, `grading.partial_credit`, `grading.notes`) are per
+assignment, as your `GET/PUT /assignments/{id}/agent-config` routes are:
+
+```python
+config = AgentConfig(db, agent="assessment", course_id=course_id, assignment_id=assignment_id)
+config.get("feedback.tone")                       # "Neutral" unless overridden
+config.set_assignment_override("feedback.tone", "Direct", set_by=instructor_id, role="instructor")
 ```
 
 The 26 shipped values are in `aied_db/defaults.json`. Replace your module

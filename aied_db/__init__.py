@@ -1,6 +1,6 @@
 """aied_db — the shared MongoDB layer for the Agentic Design Lab Framework.
 
-One database (`aied`), 25 collections, each with a `$jsonSchema` validator
+One database (`aied`), 26 collections, each with a `$jsonSchema` validator
 and its indexes. Every agent in the AIEd-Innovations org reads and writes
 through here instead of its own SQLite file, JSON folder or Cosmos container.
 

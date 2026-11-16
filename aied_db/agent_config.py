@@ -1,20 +1,23 @@
-"""Settings, resolved defaults -> course -> user.
+"""Settings, resolved defaults -> course -> assignment -> user.
 
-Three layers, narrowest wins:
+Four layers, narrowest wins:
 
   1. `agent_config_defaults` — seeded from the read-only `aied_db/defaults.json`
      folder by `scripts/init_db.py`. Read-only at runtime.
   2. a course override an instructor set (`agent_configs`, scope "course")
-  3. a personal override the user set (`agent_configs`, scope "user")
+  3. an assignment override an instructor set (`agent_configs`, scope
+     "assignment") — the assessment agent's grading preferences are per
+     assignment upstream (assessment_agent#20), so they live here
+  4. a personal override the user set (`agent_configs`, scope "user")
 
 Before login there is no user, so `AgentConfig(db, agent, course_id=...)`
-resolves layers 1-2 only; after login, pass `user_id` as well and layer 3
-applies. That is the "before login: defaults + course, after login: + user"
-rule from the Oct 26 meeting.
+resolves layers 1-2 only; pass `assignment_id` too for layer 3; after login,
+pass `user_id` as well and layer 4 applies. That is the "before login:
+defaults + course, after login: + user" rule from the Oct 26 meeting.
 
 Each default carries its own rules — `editable_by`, `type`, `choices`,
-`minimum`, `maximum` — so a new setting needs no new validation code, and
-`set_*_override` refuses a value the default does not permit.
+`minimum`, `maximum`, `max_length` — so a new setting needs no new validation
+code, and `set_*_override` refuses a value the default does not permit.
 
 NOTE: as of v0.1.0 no agent reads this yet; they all still use hard-coded
 values. Wiring them up is a separate task per repo.
@@ -59,7 +62,7 @@ class Setting:
     agent: str
     key: str
     value: Any
-    source: str  # "default", "course" or "user"
+    source: str  # "default", "course", "assignment" or "user"
     editable_by: tuple[str, ...]
     type: str
 
@@ -70,6 +73,9 @@ class AgentConfig:
         config = AgentConfig(db, "guardian", course_id=course_id, user_id=user_id)
         threshold = config.get("escalation.violation_threshold")
 
+        config = AgentConfig(db, "assessment", course_id=course_id, assignment_id="hw1")
+        tone = config.get("feedback.tone")
+
     `db` may be guarded or raw; reads only need `find`.
     """
 
@@ -79,11 +85,15 @@ class AgentConfig:
         agent: str,
         *,
         course_id: Optional[str] = None,
+        assignment_id: Optional[str] = None,
         user_id: Optional[str] = None,
     ) -> None:
+        if assignment_id is not None and course_id is None:
+            raise ConfigError("an assignment_id needs its course_id")
         self._db = db
         self._agent = agent
         self._course_id = course_id
+        self._assignment_id = assignment_id
         self._user_id = user_id
 
     # -------------------------------------------------------------- reading
@@ -93,25 +103,44 @@ class AgentConfig:
         return {document["key"]: document for document in cursor}
 
     def _overrides(self, scope: str) -> dict[str, Any]:
+        query = self._scope_filter(scope)
+        if query is None:
+            return {}
+        cursor = self._db["agent_configs"].find(query)
+        return {document["key"]: document["value"] for document in cursor}
+
+    def _scope_filter(self, scope: str) -> Optional[dict[str, Any]]:
+        """The query that finds this scope's overrides; None if it does not apply.
+
+        `assignment_id: None` also matches documents written before the field
+        existed, so older course and user overrides keep resolving.
+        """
         query: dict[str, Any] = {"agent": self._agent, "scope": scope}
         if scope == "course":
             if self._course_id is None:
-                return {}
+                return None
             query["course_id"] = self._course_id
+            query["assignment_id"] = None
+        elif scope == "assignment":
+            if self._assignment_id is None:
+                return None
+            query["course_id"] = self._course_id
+            query["assignment_id"] = self._assignment_id
         else:
             if self._user_id is None:
-                return {}
+                return None
             query["user_id"] = self._user_id
             # A personal override is still per-course when a course is in play.
             if self._course_id is not None:
                 query["course_id"] = self._course_id
-        cursor = self._db["agent_configs"].find(query)
-        return {document["key"]: document["value"] for document in cursor}
+            query["assignment_id"] = None
+        return query
 
     def resolve(self) -> dict[str, Setting]:
         """Every setting for this agent, with the winning layer recorded."""
         defaults = self.defaults()
         course = self._overrides("course")
+        assignment = self._overrides("assignment")
         user = self._overrides("user")
 
         resolved: dict[str, Setting] = {}
@@ -119,6 +148,8 @@ class AgentConfig:
             value, source = default["value"], "default"
             if key in course:
                 value, source = course[key], "course"
+            if key in assignment:
+                value, source = assignment[key], "assignment"
             if key in user:
                 value, source = user[key], "user"
             resolved[key] = Setting(
@@ -184,6 +215,11 @@ class AgentConfig:
             raise ConfigError(f"{self._agent}.{key} must be >= {minimum}, got {value!r}")
         if maximum is not None and value > maximum:
             raise ConfigError(f"{self._agent}.{key} must be <= {maximum}, got {value!r}")
+        max_length = default.get("max_length")
+        if max_length is not None and len(value) > max_length:
+            raise ConfigError(
+                f"{self._agent}.{key} must be at most {max_length} characters, got {len(value)}"
+            )
 
     def check_weights(self, pending: Optional[Mapping[str, Any]] = None) -> None:
         """Verify this agent's weight group still sums to 1.0.
@@ -217,6 +253,14 @@ class AgentConfig:
         self.check_weights({key: value})
         self._upsert("course", key, value, set_by=set_by)
 
+    def set_assignment_override(self, key: str, value: Any, *, set_by: str, role: str) -> None:
+        """Set an override for one assignment. Instructor-level, by default."""
+        if self._assignment_id is None:
+            raise ConfigError("an assignment override needs assignment_id on the AgentConfig")
+        self.validate(key, value, role=role)
+        self.check_weights({key: value})
+        self._upsert("assignment", key, value, set_by=set_by)
+
     def set_user_override(self, key: str, value: Any, *, set_by: str, role: str) -> None:
         """Set a personal override for this user."""
         if self._user_id is None:
@@ -226,17 +270,21 @@ class AgentConfig:
         self._upsert("user", key, value, set_by=set_by)
 
     def _upsert(self, scope: str, key: str, value: Any, *, set_by: str) -> None:
+        # The identifying fields go in the filter only: an upsert copies them
+        # into a new document, and $set touches just what a re-set changes —
+        # the fields a student is allowed to update on their own override.
         query = {
             "scope": scope,
             "agent": self._agent,
             "key": key,
             "course_id": self._course_id,
+            "assignment_id": self._assignment_id if scope == "assignment" else None,
             "user_id": self._user_id if scope == "user" else None,
         }
         self._db["agent_configs"].update_one(
             query,
             {
-                "$set": {**query, "value": value, "set_by": set_by, "updated_at": now()},
+                "$set": {"value": value, "set_by": set_by, "updated_at": now()},
                 "$setOnInsert": {"config_id": new_id()},
             },
             upsert=True,
@@ -295,6 +343,7 @@ def load_defaults(path: Path | None = None) -> list[dict[str, Any]]:
                     "choices": setting.get("choices"),
                     "minimum": setting.get("minimum"),
                     "maximum": setting.get("maximum"),
+                    "max_length": setting.get("max_length"),
                     "editable_by": list(setting.get("editable_by") or []),
                     "description": setting.get("description", ""),
                     "source_file": path.name,

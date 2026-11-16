@@ -301,6 +301,16 @@ POLICY: dict[str, dict[Role, Permission]] = {
         Role.INTEGRITY_AGENT: read_only(),
         Role.MIGRATION: append_only(),
     },
+    "submission_files": {
+        Role.ADMIN: full(),
+        # The instructor reads what was graded; nobody edits it afterwards.
+        Role.INSTRUCTOR: read_only(),
+        # Stored at grading time so a regrade grades the same files. Insert-
+        # only: a regrade reads these and writes a new submission_id's set.
+        # Students have no route that returns them, so no access.
+        Role.ASSESSMENT_AGENT: append_only(),
+        Role.MIGRATION: append_only(),
+    },
     # ---- integrity: the agent detects, the instructor resolves.
     "integrity_sessions": {
         Role.ADMIN: full(),
@@ -359,7 +369,13 @@ POLICY: dict[str, dict[Role, Permission]] = {
     "agent_configs": {
         Role.ADMIN: full(),
         Role.INSTRUCTOR: full(),
-        Role.STUDENT: full(),  # a student owns their personal overrides
+        # A student owns their personal overrides, and only those: INSERT_RULES
+        # pins scope to "user", OWNER_FIELD pins user_id, and an update may
+        # change the value but not move the override to another scope.
+        Role.STUDENT: _perm(
+            READ, INSERT, UPDATE, REPLACE, DELETE,
+            fields=("value", "set_by", "updated_at", "config_id"),
+        ),
         Role.MIGRATION: append_only(),
         **{role: read_only() for role in AGENT_ROLES},
     },
@@ -467,6 +483,14 @@ INSERT_RULES: dict[str, dict[Role, dict[str, frozenset]]] = {
             "final_score": frozenset({None}),
             "reviewed_at": frozenset({None}),
             "instructor_notes": frozenset({""}),
+        },
+    },
+    "agent_configs": {
+        # Without this a student could write a scope "course" or "assignment"
+        # override with their own user_id and change the setting for everyone.
+        Role.STUDENT: {
+            "scope": frozenset({"user"}),
+            "assignment_id": frozenset({None}),
         },
     },
     "integrity_escalations": {
