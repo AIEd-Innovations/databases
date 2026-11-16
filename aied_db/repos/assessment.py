@@ -276,7 +276,8 @@ class AssessmentRepo:
     def insert_result(self, result: dict) -> dict:
         """POST /submit — record one grading attempt. INSERT-ONLY.
 
-        A regrade is a new `submission_id`, never an edit of this document.
+        A regrade is a new `submission_id` with `regrade_of` pointing at the one it regrades,
+        never an edit of this document.
         The submitted text is not stored: `files` holds filenames only.
         """
         document = {
@@ -293,6 +294,8 @@ class AssessmentRepo:
             "feedback": result.get("feedback"),
             "status": result.get("status", "ai_graded"),
             "review_reasons": list(result.get("review_reasons") or []),
+            "regrade_of": result.get("regrade_of"),
+            "regrade_instructions": str(result.get("regrade_instructions") or ""),
             "final_score": None,
             "instructor_notes": "",
             "reviewed_at": None,

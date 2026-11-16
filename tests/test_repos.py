@@ -272,6 +272,22 @@ def test_a_regrade_is_a_new_submission(agent_repo):
     assert len(agent_repo.list_results()) == 2
 
 
+def test_a_regrade_records_what_it_regrades_and_why(agent_repo):
+    agent_repo.insert_result(FACTORIES["assessment_results"]())
+    regrade = agent_repo.insert_result(
+        FACTORIES["assessment_results"](
+            submission_id="sub-002",
+            regrade_of="sub-001",
+            regrade_instructions="Recursion is fine.",
+        )
+    )
+    assert regrade["regrade_of"] == "sub-001"
+    assert regrade["regrade_instructions"] == "Recursion is fine."
+    first = agent_repo.get_result("sub-001")
+    assert first["regrade_of"] is None
+    assert first["regrade_instructions"] == ""
+
+
 # ── Integrity ────────────────────────────────────────────────────────────────
 
 

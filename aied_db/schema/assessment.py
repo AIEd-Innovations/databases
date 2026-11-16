@@ -255,6 +255,14 @@ ASSESSMENT_RESULT_SCHEMA: dict[str, Any] = {
             "minimum": 0,
             "description": "Set by an instructor; REPLACES score. 0..max_score",
         },
+        "regrade_of": {
+            "bsonType": nullable("string"),
+            "description": "The submission_id this result regrades; null for a first grading",
+        },
+        "regrade_instructions": {
+            "bsonType": "string",
+            "description": "The instructor's notes to the grader for that regrade",
+        },
         "instructor_notes": {"bsonType": "string"},
         "reviewed_at": {"bsonType": nullable("date")},
         "created_at": {"bsonType": "date"},

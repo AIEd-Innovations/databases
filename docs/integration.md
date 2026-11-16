@@ -214,7 +214,7 @@ config = AgentConfig(db, agent="guardian", course_id=course_id, user_id=student_
 threshold = config.get("escalation.violation_threshold")  # 3 unless overridden
 ```
 
-The 22 shipped values are in `aied_db/defaults.json`. Replace your module
+The 26 shipped values are in `aied_db/defaults.json`. Replace your module
 constants with `config.get(...)` as you go — there is no rush, but a constant
 is a setting an instructor cannot reach.
 

@@ -572,6 +572,8 @@ each collection's policy table is generated from `POLICY` in
 | `status` | enum(ai_graded, needs_review, instructor_graded) | yes |  |  |
 | `review_reasons` | array<string> |  |  |  |
 | `final_score` | double \\| int \\| null |  | `>= 0` | Set by an instructor; REPLACES score. 0..max_score |
+| `regrade_of` | string \\| null |  |  | The submission_id this result regrades; null for a first grading |
+| `regrade_instructions` | string |  |  | The instructor's notes to the grader for that regrade |
 | `instructor_notes` | string |  |  |  |
 | `reviewed_at` | date \\| null |  |  |  |
 | `created_at` | date | yes |  |  |
