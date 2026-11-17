@@ -3,7 +3,7 @@
 # Collections
 
 The `aied` database: 26 collections, each with a `$jsonSchema` validator
-and its indexes. Validation level is `moderate` by default â€” existing
+and its indexes. Validation level is `moderate` by default — existing
 documents are left alone, new and changed ones are checked.
 
 Field tables below are generated from `aied_db/schema/`. The access column of
@@ -31,10 +31,10 @@ each collection's policy table is generated from `POLICY` in
 | `id` | string | yes |  | Owns course_id everywhere else in the database |
 | `name` | string | yes |  |  |
 | `instructor_id` | string | yes |  | users.id |
-| `blob_container_name` | string | yes |  |  |
-| `search_index_name` | string | yes |  |  |
-| `search_indexer_name` | string | yes |  |  |
-| `search_datasource_name` | string | yes |  |  |
+| `blob_container_name` | string \\| null |  |  |  |
+| `search_index_name` | string \\| null |  |  |  |
+| `search_indexer_name` | string \\| null |  |  |  |
+| `search_datasource_name` | string \\| null |  |  |  |
 | `created_at` | date | yes |  |  |
 
 **Indexes**
@@ -170,7 +170,7 @@ each collection's policy table is generated from `POLICY` in
 | `title` | string | yes |  |  |
 | `spec_markdown` | string | yes |  | The lab handout |
 | `quiz` | array<object> | yes |  |  |
-| `quiz[].id` | string |  |  | q1, q2, â€¦ unique within the quiz |
+| `quiz[].id` | string |  |  | q1, q2, … unique within the quiz |
 | `quiz[].question` | string |  |  |  |
 | `quiz[].type` | enum(short_answer, multiple_choice, code, essay) |  |  |  |
 | `quiz[].expected_answer` | string |  |  |  |
@@ -400,7 +400,7 @@ each collection's policy table is generated from `POLICY` in
 
 | Field | Type | Required | Constraints | Notes |
 | --- | --- | --- | --- | --- |
-| `document_id` | string | yes |  | UUID4; Azure's parent_id. Human upload â€” read-only to agents |
+| `document_id` | string | yes |  | UUID4; Azure's parent_id. Human upload — read-only to agents |
 | `course_id` | string | yes |  | courses.id |
 | `lab_id` | string \\| null |  |  | Set when the document belongs to one lab rather than the course |
 | `title` | string | yes |  | Azure's title; RetrievedDoc.source |
@@ -508,7 +508,7 @@ each collection's policy table is generated from `POLICY` in
 
 | Field | Type | Required | Constraints | Notes |
 | --- | --- | --- | --- | --- |
-| `file_id` | string | yes |  | UUID4. The student's own work â€” read-only to agents |
+| `file_id` | string | yes |  | UUID4. The student's own work — read-only to agents |
 | `course_id` | string | yes |  |  |
 | `student_id` | string | yes |  | users.id |
 | `lab_id` | string \\| null |  |  |  |
@@ -615,7 +615,7 @@ each collection's policy table is generated from `POLICY` in
 | `content_type` | string \\| null |  |  |  |
 | `size_bytes` | int \\| null |  | `>= 0` |  |
 | `kind` | enum(solution, material) | yes |  | SECRET when 'solution': reference solutions and answer keys |
-| `original` | bool | yes |  | True for originals/ â€” the upload exactly as received; False for the extracted-text copy spec.py reads |
+| `original` | bool | yes |  | True for originals/ — the upload exactly as received; False for the extracted-text copy spec.py reads |
 | `uploaded_by` | string \\| null |  |  | users.id |
 | `uploaded_at` | date | yes |  |  |
 | `storage_key` | string | yes |  | assignments/{course_id}/{assignment_id}/{kind}/{file_id}/{filename} |
@@ -929,7 +929,7 @@ each collection's policy table is generated from `POLICY` in
 | Keys | Unique | Purpose |
 | --- | --- | --- |
 | `config_id_1` | yes | Primary key |
-| `scope_1_course_id_1_assignment_id_1_user_id_1_agent_1_key_1` | yes | One override per setting per scope â€” re-setting updates in place |
+| `scope_1_course_id_1_assignment_id_1_user_id_1_agent_1_key_1` | yes | One override per setting per scope — re-setting updates in place |
 | `agent_1_key_1` |  | Who has overridden a given setting |
 
 **Access**

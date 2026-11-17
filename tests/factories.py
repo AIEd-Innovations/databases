@@ -38,6 +38,8 @@ def course(**overrides: Any) -> dict:
         "id": COURSE_ID,
         "name": "CSC 580",
         "instructor_id": INSTRUCTOR_ID,
+        # Optional: a course created from the instructor dashboard has none of
+        # these. Kept here so the factory stays a full, pipeline-made course.
         "blob_container_name": "csc580",
         "search_index_name": "csc580-idx",
         "search_indexer_name": "csc580-indexer",

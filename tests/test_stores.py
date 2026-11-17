@@ -324,6 +324,15 @@ def user(**overrides):
     }
 
 
+#: The Azure blob container and search resources — optional on a course.
+AZURE_KEYS = (
+    "blob_container_name",
+    "search_index_name",
+    "search_indexer_name",
+    "search_datasource_name",
+)
+
+
 def course(**overrides):
     return {
         "id": COURSE_ID,
@@ -416,6 +425,21 @@ def test_course_round_trip_drops_the_legacy_db_paths(system_store, raw_db):
     stored = raw_db["courses"].find_one({"id": COURSE_ID})
     assert "participant_db_path" not in stored
     assert system_store.get_course(COURSE_ID)["name"] == "CSC 580"
+
+
+def test_a_course_from_the_dashboard_needs_no_azure_fields(system_store, raw_db):
+    """An instructor creating a course has no blob container or search index.
+
+    The four Azure names are the ingestion pipeline's; they are optional in the
+    schema and default to null here (curriculum-designer#16).
+    """
+    bare = {k: v for k, v in course().items() if k not in AZURE_KEYS}
+    system_store.insert_course(bare)
+
+    stored = raw_db["courses"].find_one({"id": COURSE_ID})
+    assert all(stored[key] is None for key in AZURE_KEYS)
+    assert system_store.get_course(COURSE_ID)["name"] == "CSC 580"
+    assert [c["id"] for c in system_store.list_courses(instructor_id=INSTRUCTOR_ID)] == [COURSE_ID]
 
 
 def test_update_course_ignores_an_empty_patch(system_store):
