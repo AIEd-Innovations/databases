@@ -80,6 +80,14 @@ def test_agent_cannot_create_an_approved_lab(db):
     agent["labs"].insert_one(FACTORIES["labs"]())  # a pending draft is fine
 
 
+@pytest.mark.parametrize("step", ["spec", "quiz", "rubric"])
+def test_agent_cannot_create_a_lab_with_a_step_already_approved(db, step):
+    agent = guarded(db, Role.CURRICULUM_AGENT, "curriculum_agent")
+    with pytest.raises(PermissionError_, match=f"{step}_status"):
+        agent["labs"].insert_one(FACTORIES["labs"](**{f"{step}_status": "approved"}))
+    agent["labs"].insert_one(FACTORIES["labs"](**{f"{step}_status": "pending"}))
+
+
 def test_agent_cannot_forge_an_instructor_grade(db):
     agent = guarded(db, Role.ASSESSMENT_AGENT, "assessment_agent")
     with pytest.raises(PermissionError_, match="status"):

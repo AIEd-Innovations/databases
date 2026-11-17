@@ -2,7 +2,8 @@
 """Create or update the `aied` database: validators, indexes, defaults.
 
 Idempotent — run it on every deploy. It never drops a collection and never
-deletes a document.
+deletes a document. The only thing it drops is an index listed in
+`schema.RETIRED_INDEXES`, which a newer index has replaced.
 
     python scripts/init_db.py              # apply schema + indexes + seed defaults
     python scripts/init_db.py --ping       # just check the connection, change nothing

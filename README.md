@@ -162,8 +162,8 @@ exist with current validators and their full index sets; the vector index is
 
 **Not yet applied to Atlas:** the regrade fields on `assessment_results`, the
 new `submission_files` collection, the `assignment` settings scope (which
-replaces one `agent_configs` unique index) and the 4 new assessment settings.
-Run `python scripts/init_db.py` with cluster access to apply them; it drops the
+replaces one `agent_configs` unique index), the 4 new assessment settings,
+and the per-step approval fields on `labs` (curriculum-designer#13). Run `python scripts/init_db.py` with cluster access to apply them; it drops the
 superseded index itself.
 
 Verified on the real server, not just mongomock: validators reject a bad
