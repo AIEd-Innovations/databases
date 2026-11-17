@@ -475,6 +475,13 @@ INSERT_RULES: dict[str, dict[Role, dict[str, frozenset]]] = {
             "approval_status": frozenset({"pending"}),
             "approved_by": frozenset({None}),
             "approval_notes": frozenset({None}),
+            # Per-step approval (curriculum-designer#13). Like approval_status
+            # these are human decisions, so they are not in the agent's update
+            # fields either: a route that approves a step or resets later ones
+            # writes them as Role.INSTRUCTOR.
+            "spec_status": frozenset({"pending"}),
+            "quiz_status": frozenset({"pending"}),
+            "rubric_status": frozenset({"pending"}),
         },
     },
     "assessment_results": {

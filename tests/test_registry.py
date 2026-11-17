@@ -111,8 +111,11 @@ def test_nobody_may_edit_or_delete_a_revision():
 
 
 def test_agents_cannot_approve_a_lab():
-    """An agent drafts a lab; only a human approves it."""
-    approval_fields = {"approval_status", "approved_by", "approval_notes"}
+    """An agent drafts a lab; only a human approves it, whole or one step at a time."""
+    approval_fields = {
+        "approval_status", "approved_by", "approval_notes",
+        "spec_status", "quiz_status", "rubric_status",
+    }
     permission = permission_for(Role.CURRICULUM_AGENT, "labs")
     assert permission.fields is not None
     assert not (permission.fields & approval_fields)
