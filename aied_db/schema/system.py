@@ -9,6 +9,9 @@ server layer reads those keys. Note the primary key is `id`, not `user_id` /
 Differences from the SQLite original, all deliberate:
   - `created_at` / `enrolled_at` are BSON dates here; the stores convert to
     ISO strings on the way out (see `_util.to_iso`).
+  - `courses`' four Azure fields (`blob_container_name` and the three
+    `search_*` names) are optional: they are the ingestion pipeline's, and a
+    course created from the instructor dashboard has none of them.
   - SQLite's `participant_db_path` / `guardian_db_path` columns are dropped:
     they pointed at per-course .db files, which is exactly what this package
     replaces. The migration script must not carry them over.
@@ -45,16 +48,7 @@ USER_SCHEMA: dict[str, Any] = {
 
 COURSE_SCHEMA: dict[str, Any] = {
     "bsonType": "object",
-    "required": [
-        "id",
-        "name",
-        "instructor_id",
-        "blob_container_name",
-        "search_index_name",
-        "search_indexer_name",
-        "search_datasource_name",
-        "created_at",
-    ],
+    "required": ["id", "name", "instructor_id", "created_at"],
     "additionalProperties": False,
     "properties": {
         "_id": {},
@@ -64,10 +58,13 @@ COURSE_SCHEMA: dict[str, Any] = {
         },
         "name": {"bsonType": "string"},
         "instructor_id": {"bsonType": "string", "description": "users.id"},
-        "blob_container_name": {"bsonType": "string"},
-        "search_index_name": {"bsonType": "string"},
-        "search_indexer_name": {"bsonType": "string"},
-        "search_datasource_name": {"bsonType": "string"},
+        # Azure-only: the blob container and the three search resources belong
+        # to the ingestion pipeline. A course an instructor creates from the
+        # dashboard has none of them, so these are optional and may be null.
+        "blob_container_name": {"bsonType": nullable("string")},
+        "search_index_name": {"bsonType": nullable("string")},
+        "search_indexer_name": {"bsonType": nullable("string")},
+        "search_datasource_name": {"bsonType": nullable("string")},
         "created_at": {"bsonType": "date"},
     },
 }

@@ -31,6 +31,16 @@ _CI = {"locale": "en", "strength": 2}
 #: Columns that existed only to locate a per-course SQLite file.
 _LEGACY_COURSE_KEYS = ("participant_db_path", "guardian_db_path")
 
+#: The Azure blob container and search resources. Optional: the ingestion
+#: pipeline fills them in, and a course created from the instructor dashboard
+#: has none of them.
+_AZURE_COURSE_KEYS = (
+    "blob_container_name",
+    "search_index_name",
+    "search_indexer_name",
+    "search_datasource_name",
+)
+
 
 class MongoSystemStore:
     """Multi-tenant metadata in `users`, `courses` and `enrollments`."""
@@ -105,19 +115,19 @@ class MongoSystemStore:
 
     # ----------------------------------------------------------- courses
     def insert_course(self, item: dict) -> None:
-        """`item` keys: id, name, instructor_id, blob_container_name,
-        search_index_name, search_indexer_name, search_datasource_name,
-        created_at. The two legacy *_db_path keys are dropped if present."""
+        """`item` keys: id, name, instructor_id, created_at, and optionally
+        blob_container_name, search_index_name, search_indexer_name,
+        search_datasource_name — the Azure resources, which a course created
+        from the instructor dashboard does not have. They default to None.
+        The two legacy *_db_path keys are dropped if present."""
         document = {
             "id": item["id"],
             "name": item["name"],
             "instructor_id": item["instructor_id"],
-            "blob_container_name": item["blob_container_name"],
-            "search_index_name": item["search_index_name"],
-            "search_indexer_name": item["search_indexer_name"],
-            "search_datasource_name": item["search_datasource_name"],
             "created_at": to_dt(item["created_at"]),
         }
+        for key in _AZURE_COURSE_KEYS:
+            document[key] = item.get(key)
         self._db["courses"].insert_one(document)
 
     def get_course(self, course_id: str) -> Optional[dict]:
