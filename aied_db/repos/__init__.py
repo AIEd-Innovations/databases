@@ -12,5 +12,6 @@ route can hand one straight back.
 from .assessment import AssessmentRepo
 from .integrity import IntegrityRepo
 from .lab_companion import LabCompanionRepo
+from .submissions import SubmissionRepo
 
-__all__ = ["AssessmentRepo", "IntegrityRepo", "LabCompanionRepo"]
+__all__ = ["AssessmentRepo", "IntegrityRepo", "LabCompanionRepo", "SubmissionRepo"]

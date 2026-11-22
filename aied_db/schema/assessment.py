@@ -1,5 +1,5 @@
-"""Assessment Agent collections: assignments, assignment_files, assessment_results,
-submission_files.
+"""Assessment Agent collections: assignments, assignment_files, student_submissions,
+assessment_results, submission_files.
 
 Ported from AIEd-Innovations/assessment_agent @c019f0f (2026-10-26), which is
 Sean's redesign: "the agent only grades". `assignments` mirrors `spec.py`'s
@@ -10,6 +10,12 @@ folders that `spec.py` reads off disk.
 `submission_files` mirrors `submissions.py` (assessment_agent#21, 2026-11-04):
 the submitted files, kept apart from the result so a submission can be
 regraded. The result itself still holds filenames only.
+
+`student_submissions` is the workflow agreed with the UI teams in November: a student submits
+through ui-student and the work waits there, ungraded, until an instructor
+triggers grading from ui-instructor with their own API key. It is the
+"submissions" store; `assessment_results` is the "graded submissions" store.
+A result points back at the work it graded with `student_submission_id`.
 
 What is deliberately NOT here, because the redesign removed it: test cases,
 report evaluation, anomaly reports and a review queue. The task3 assessment
@@ -264,6 +270,11 @@ ASSESSMENT_RESULT_SCHEMA: dict[str, Any] = {
             "bsonType": nullable("string"),
             "description": "The submission_id this result regrades; null for a first grading",
         },
+        "student_submission_id": {
+            "bsonType": nullable("string"),
+            "description": "The student_submissions.submission_id this result grades; "
+                           "null for work an instructor uploaded directly",
+        },
         "regrade_instructions": {
             "bsonType": "string",
             "description": "The instructor's notes to the grader for that regrade",
@@ -282,6 +293,41 @@ SUBMITTED_FILE_SCHEMA: dict[str, Any] = {
     "properties": {
         "filename": {"bsonType": "string"},
         "content": {"bsonType": "string", "description": "The file as submitted"},
+    },
+}
+
+STUDENT_SUBMISSION_SCHEMA: dict[str, Any] = {
+    "bsonType": "object",
+    "required": [
+        "submission_id",
+        "student_id",
+        "assignment_id",
+        "course_id",
+        "attempt",
+        "files",
+        "submitted_at",
+    ],
+    "additionalProperties": False,
+    "properties": {
+        "_id": {},
+        "submission_id": {"bsonType": "string", "description": "UUID4"},
+        "student_id": {"bsonType": "string", "description": "users.id; always the submitter"},
+        "assignment_id": {"bsonType": "string", "description": "assignments.assignment_id"},
+        "course_id": {"bsonType": "string"},
+        "attempt": {
+            "bsonType": "int",
+            "minimum": 1,
+            "description": "1 for the first submission to an assignment; a resubmission is "
+                           "a new document with the next number, never an edit",
+        },
+        "files": {
+            "bsonType": "array",
+            "minItems": 1,
+            "items": SUBMITTED_FILE_SCHEMA,
+            "description": "What the student handed in; what grading reads",
+        },
+        "comment": {"bsonType": "string", "description": "The student's note to the instructor"},
+        "submitted_at": {"bsonType": "date"},
     },
 }
 
@@ -326,6 +372,16 @@ ASSESSMENT_RESULT_INDEXES: IndexSpec = [
      False, "One assignment's results"),
     ([("course_id", 1), ("status", 1), ("created_at", 1)],
      False, "The needs_review work queue, oldest first"),
+    ([("course_id", 1), ("student_submission_id", 1), ("created_at", -1)],
+     False, "Which student submissions are graded, and their newest result"),
+]
+
+STUDENT_SUBMISSION_INDEXES: IndexSpec = [
+    ([("submission_id", 1)], True, "Primary key; insert-only"),
+    ([("course_id", 1), ("student_id", 1), ("assignment_id", 1), ("attempt", 1)],
+     True, "One document per attempt; a race to submit twice fails instead of duplicating"),
+    ([("course_id", 1), ("assignment_id", 1), ("submitted_at", -1)],
+     False, "The instructor's list of one assignment's submissions"),
 ]
 
 SUBMISSION_FILE_INDEXES: IndexSpec = [
@@ -337,6 +393,7 @@ SUBMISSION_FILE_INDEXES: IndexSpec = [
 COLLECTIONS: dict[str, dict[str, Any]] = {
     "assignments": collection(ASSIGNMENT_SCHEMA, ASSIGNMENT_INDEXES),
     "assignment_files": collection(ASSIGNMENT_FILE_SCHEMA, ASSIGNMENT_FILE_INDEXES),
+    "student_submissions": collection(STUDENT_SUBMISSION_SCHEMA, STUDENT_SUBMISSION_INDEXES),
     "assessment_results": collection(ASSESSMENT_RESULT_SCHEMA, ASSESSMENT_RESULT_INDEXES),
     "submission_files": collection(SUBMISSION_FILE_SCHEMA, SUBMISSION_FILE_INDEXES),
 }
