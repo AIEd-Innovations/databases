@@ -443,6 +443,19 @@ def revision(**overrides: Any) -> dict:
     }
 
 
+def student_submission(**overrides: Any) -> dict:
+    return {
+        "submission_id": "ssub-001",
+        "student_id": STUDENT_ID,
+        "assignment_id": "hw1_sorting",
+        "course_id": COURSE_ID,
+        "attempt": 1,
+        "files": [{"filename": "solution.py", "content": "def sort(xs):\n    return sorted(xs)\n"}],
+        "submitted_at": now(),
+        **overrides,
+    }
+
+
 def submission_file(**overrides: Any) -> dict:
     return {
         "submission_id": "sub-001",
@@ -505,6 +518,7 @@ FACTORIES: dict[str, Callable[..., dict]] = {
     "rag_queries": rag_query,
     "assignments": assignment,
     "assignment_files": assignment_file,
+    "student_submissions": student_submission,
     "assessment_results": assessment_result,
     "submission_files": submission_file,
     "integrity_sessions": integrity_session,

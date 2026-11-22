@@ -3,7 +3,7 @@
 For the owners of `ui-student`, `assessment_agent`, `curriculum-designer`,
 `participant-agent` and `ui-instructor`.
 
-Every agent now reads and writes one MongoDB Atlas database — `aied`, 25
+Every agent now reads and writes one MongoDB Atlas database — `aied`, 27
 collections — instead of its own SQLite file, JSON folder or Cosmos
 container. This page is what you need to do in your repo.
 
@@ -136,6 +136,59 @@ files = repo.get_submitted_files(submission_id)
 
 `GET /results?latest=true` is `list_results(latest=True)`, filtered in the same
 order as your route.
+
+### Student submissions (ui-student → ui-instructor → assessment_agent)
+
+Students submit to the database; instructors grade from it with their own API
+key. Two collections:
+
+| Store | Collection | ui-student | ui-instructor | assessment_agent |
+| --- | --- | --- | --- | --- |
+| Submissions | `student_submissions` | write (insert) + read own | read | read |
+| Graded submissions | `assessment_results` | read | read + write (review, manual grade) | write (insert) |
+
+**ui-student** — as `Role.STUDENT`, with the signed-in student's id as `actor_id`:
+
+```python
+from aied_db.repos import SubmissionRepo
+
+db = guarded(get_db(), Role.STUDENT, actor_id=student_id)
+repo = SubmissionRepo(db, course_id=course_id)
+
+row = repo.submit(assignment_id, [{"filename": "main.py", "content": text}], comment="")
+repo.list_submissions()                 # this student's history, each marked graded or not
+repo.get_submission(row["submission_id"])
+```
+
+A student can only submit as, and read, themselves — the repo uses the
+guard's `actor_id` whatever `student_id` the route passes. Resubmitting
+creates `attempt` 2, 3, …; nothing is ever edited or deleted.
+
+**ui-instructor**, through whichever service it calls, as `Role.INSTRUCTOR`:
+
+```python
+subs = SubmissionRepo(guarded(get_db(), Role.INSTRUCTOR, actor_id=instructor_id), course_id)
+subs.list_submissions(assignment_id=aid, latest=True, graded=False)   # the to-grade queue
+subs.get_submission(submission_id)                                    # with file contents
+```
+
+Each row carries `graded`, `latest_result_id`, `grade_status` and `graded_at`.
+
+**assessment_agent**, when the instructor clicks Grade (using the instructor's key):
+
+```python
+sub = SubmissionRepo(db, course_id).get_submission(submission_id)
+result = grade(sub["files"])                                          # your existing pipeline
+AssessmentRepo(db, course_id).insert_result(
+    {**result.model_dump(), "student_submission_id": sub["submission_id"]},
+    submitted_files=sub["files"],
+)
+```
+
+`insert_result` refuses a `student_submission_id` that doesn't exist in the
+course or belongs to another student or assignment.
+`list_results(student_submission_id=...)` returns every grade of one
+submission, regrades included; `review_result` is unchanged.
 
 ### curriculum-designer
 

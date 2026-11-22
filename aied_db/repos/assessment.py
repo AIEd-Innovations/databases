@@ -14,6 +14,9 @@ service is a matter of replacing `persistence.append_json` / `read_json` /
     GET    /assignments/{id}/materials                -> list_materials
     DELETE /assignments/{id}/materials/{name}         -> delete_material
     POST   /submit, /submit-json                      -> insert_result
+    (grade a student's submission)                    -> SubmissionRepo.get_submission,
+                                                         then insert_result with
+                                                         student_submission_id
     GET    /results                                   -> list_results
     GET    /results/{submission_id}                   -> get_result
     POST   /results/{submission_id}/regrade           -> get_submitted_files, then insert_result
@@ -280,12 +283,34 @@ class AssessmentRepo:
         A regrade is a new `submission_id` with `regrade_of` pointing at the one it regrades,
         never an edit of this document.
 
+        Grading work a student submitted through ui-student: set
+        `result["student_submission_id"]` to that submission's id. It must
+        exist in this course and belong to the same student and assignment,
+        or ValueError — MongoDB has no foreign keys, so this is the check.
+        Leave it out for files an instructor uploaded directly.
+
         `submitted_files` is `[{"filename", "content"}, ...]`, as upstream's
         `_save_result(result, files)` receives them. They go to
         `submission_files`, not onto the result, so result reads stay small;
         `get_submitted_files` returns them for a regrade. Omit them and that
         result cannot be regraded, as upstream for results graded before #21.
         """
+        student_submission_id = result.get("student_submission_id")
+        if student_submission_id:
+            source = self._db["student_submissions"].find_one(
+                self._scope(submission_id=student_submission_id)
+            )
+            if source is None:
+                raise ValueError(
+                    f"no student submission {student_submission_id!r} in course "
+                    f"{self._course_id!r}"
+                )
+            for field in ("student_id", "assignment_id"):
+                if source[field] != result[field]:
+                    raise ValueError(
+                        f"student submission {student_submission_id!r} has {field} "
+                        f"{source[field]!r}, not {result[field]!r}"
+                    )
         if submitted_files is not None:
             self._db["submission_files"].insert_one(
                 {
@@ -315,6 +340,7 @@ class AssessmentRepo:
             "status": result.get("status", "ai_graded"),
             "review_reasons": list(result.get("review_reasons") or []),
             "regrade_of": result.get("regrade_of"),
+            "student_submission_id": student_submission_id or None,
             "regrade_instructions": str(result.get("regrade_instructions") or ""),
             "final_score": None,
             "instructor_notes": "",
@@ -331,6 +357,7 @@ class AssessmentRepo:
         student_id: Optional[str] = None,
         assignment_id: Optional[str] = None,
         status: Optional[str] = None,
+        student_submission_id: Optional[str] = None,
         latest: bool = False,
     ) -> list[dict]:
         """GET /results — the same optional filters as the route, newest first.
@@ -340,12 +367,17 @@ class AssessmentRepo:
         `status` filters, so `status="needs_review", latest=True` is the
         students whose current grade needs review — not each student's newest
         needs_review result, which a later regrade may have superseded.
+
+        `student_submission_id` gives every grade of one student submission,
+        regrades included, newest first.
         """
         query = self._scope()
         if student_id:
             query["student_id"] = student_id
         if assignment_id:
             query["assignment_id"] = assignment_id
+        if student_submission_id:
+            query["student_submission_id"] = student_submission_id
         if status and not latest:
             query["status"] = status
         # _id breaks created_at ties (same millisecond) in insertion order.
@@ -378,10 +410,23 @@ class AssessmentRepo:
         Upstream's `submissions.load_files`. None means the regrade route
         answers 409 ("resubmit to grade it again"). Instructors and the agent
         only; there is no student-facing form.
+
+        A result graded from `student_submissions` without its own copy in
+        `submission_files` falls back to the student's submission, which is
+        insert-only and so still exactly what was graded.
         """
         document = self._db["submission_files"].find_one(
             self._scope(submission_id=submission_id)
         )
+        if document is None:
+            result = self._db["assessment_results"].find_one(
+                self._scope(submission_id=submission_id), {"student_submission_id": 1}
+            )
+            source_id = (result or {}).get("student_submission_id")
+            if source_id:
+                document = self._db["student_submissions"].find_one(
+                    self._scope(submission_id=source_id)
+                )
         return None if document is None else [dict(f) for f in document["files"]]
 
     def review_result(
