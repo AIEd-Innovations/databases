@@ -132,7 +132,10 @@ def main() -> int:
     group.add_argument("--print", action="store_true", dest="show",
                        help="print the payloads and exit; touches no network")
     group.add_argument("--create", action="store_true",
-                       help="create the roles in Atlas")
+                       help="create the roles in Atlas via the Admin API")
+    group.add_argument("--cli", action="store_true",
+                       help="print `atlas customDbRoles create` commands instead; "
+                            "needs no API key, just `atlas auth login`")
     parser.add_argument("--role", help="only this one role")
     parser.add_argument("--db", default=None,
                         help="database the roles apply to (default: MONGODB_DB)")
@@ -146,6 +149,21 @@ def main() -> int:
             fail(f"no such role: {args.role}")
 
     payloads = [to_api_payload(definition) for definition in definitions]
+
+    if args.cli:
+        print("# Run `atlas auth login` first — browser sign-in, no API key needed.")
+        print("# Your Atlas account needs the Project Owner role on this project.")
+        print(f"# {len(definitions)} roles for the '{database}' database.\n")
+        for definition in definitions:
+            privileges = []
+            for privilege in definition["privileges"]:
+                resource = privilege["resource"]
+                target = f"{resource['db']}.{resource['collection']}"
+                for action in privilege["actions"]:
+                    privileges.append(f"{ACTIONS[action]}@{target}")
+            flags = " \\\n    ".join(f"--privilege {p}" for p in privileges)
+            print(f"atlas customDbRoles create {definition['role']} \\\n    {flags}\n")
+        return 0
 
     if args.show:
         print(f"# {len(payloads)} custom roles for the '{database}' database.")
