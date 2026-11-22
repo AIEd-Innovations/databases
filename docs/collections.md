@@ -191,11 +191,15 @@ each collection's policy table is generated from `POLICY` in
 | `approval_status` | enum(pending, approved, needs_changes) | yes |  |  |
 | `approved_by` | string \\| null |  |  |  |
 | `approval_notes` | string \\| null |  |  |  |
+| `spec_status` | enum(pending, approved, needs_changes) |  |  |  |
+| `quiz_status` | enum(pending, approved, needs_changes) |  |  |  |
+| `rubric_status` | enum(pending, approved, needs_changes) |  |  |  |
 | `feedback_history` | array<object> |  |  |  |
 | `feedback_history[].feedback` | string |  |  |  |
 | `feedback_history[].requested_by` | string |  |  |  |
 | `feedback_history[].requested_at` | date |  |  |  |
 | `feedback_history[].resulting_version` | int |  | `>= 1` | The version produced AFTER this feedback was applied |
+| `feedback_history[].step` | enum(spec, quiz, rubric, all) |  |  | The step the feedback was about; 'all' for a whole-lab request |
 | `version` | int | yes | `>= 1` |  |
 | `generated_at` | date | yes |  |  |
 | `last_updated` | date | yes |  |  |

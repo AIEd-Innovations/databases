@@ -165,17 +165,14 @@ AIED_DB_ATLAS_TEST=1 MONGODB_DB=aied_smoke pytest tests/test_atlas_smoke.py -v
 
 ## Status
 
-**Live on Atlas** (MongoDB 8.0, `aied`) as of 2026-10-29. All 25 collections
-exist with current validators and their full index sets; the vector index is
-`READY` and queryable; the 22 factory settings are seeded.
+**Live on Atlas** (MongoDB 8.0, `aied`) as of 2026-11-22. All 27 collections
+exist with current validators and their full index sets, including
+`student_submissions` and `submission_files`; the vector index is `READY` and
+queryable; the 26 factory settings are seeded.
 
-**Not yet applied to Atlas:** the regrade fields on `assessment_results`, the
-new `submission_files` collection, the `assignment` settings scope (which
-replaces one `agent_configs` unique index), the 4 new assessment settings,
-and the new `student_submissions` collection with the
-`assessment_results.student_submission_id` link to it.
-Run `python scripts/init_db.py` with cluster access to apply them; it drops the
-superseded index itself.
+**Not yet applied to Atlas:** the per-step approval fields on `labs`
+(curriculum-designer#13). Run `python scripts/init_db.py` with cluster access
+to apply them.
 
 Verified on the real server, not just mongomock: validators reject a bad
 document, the unique indexes hold, email uniqueness and lookup are

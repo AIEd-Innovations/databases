@@ -2,13 +2,14 @@
 
 COPY — DO NOT EDIT HERE FIRST.
 Source of truth: AIEd-Innovations/curriculum-designer, `services/schema.py`
-Copied from commit 93ec2c0 (2026-10-26). Shreevatson owns that file; change
-it there, then re-copy, so the two cannot drift apart silently.
+Copied from commit fb007d0 (2026-11-16, curriculum-designer#13). Shreevatson
+owns that file; change it there, then re-copy, so the two cannot drift apart
+silently.
 
 Everything below the header is upstream's text verbatim, except that
 upstream's `validator_for` / `ensure_collection` / `ensure_all` are omitted:
-applying the schema is `aied_db.schema.ensure_all`'s job for all 25
-collections at once. `tests/test_curriculum_parity.py` fails if this copy
+applying the schema is `aied_db.schema.ensure_all`'s job for all 26
+collections at once. `tests/test_curriculum_copy.py` fails if this copy
 stops matching upstream.
 """
 
@@ -23,6 +24,7 @@ DIFFICULTY_TIERS = ["basic", "intermediate", "challenge"]
 APPROVAL_STATUSES = ["pending", "approved", "needs_changes"]
 MATERIAL_WEIGHTS = ["strict", "balanced", "expansive"]
 FILE_KINDS = ["material", "instructions"]
+FEEDBACK_STEPS = ["spec", "quiz", "rubric", "all"]
 
 
 def _nullable(bson_type: str) -> list[str]:
@@ -85,6 +87,10 @@ FEEDBACK_ENTRY_SCHEMA: dict[str, Any] = {
             "minimum": 1,
             "description": "The version produced AFTER this feedback was applied",
         },
+        "step": {
+            "enum": FEEDBACK_STEPS,
+            "description": "The step the feedback was about; 'all' for a whole-lab request",
+        },
     },
 }
 
@@ -129,6 +135,9 @@ LAB_SCHEMA: dict[str, Any] = {
         "approval_status": {"enum": APPROVAL_STATUSES},
         "approved_by": {"bsonType": _nullable("string")},
         "approval_notes": {"bsonType": _nullable("string")},
+        "spec_status": {"enum": APPROVAL_STATUSES},
+        "quiz_status": {"enum": APPROVAL_STATUSES},
+        "rubric_status": {"enum": APPROVAL_STATUSES},
         "feedback_history": {"bsonType": "array", "items": FEEDBACK_ENTRY_SCHEMA},
         "version": {"bsonType": "int", "minimum": 1},
         "generated_at": {"bsonType": "date"},
@@ -189,5 +198,3 @@ COLLECTIONS: dict[str, dict[str, Any]] = {
     "labs": {"schema": LAB_SCHEMA, "indexes": LAB_INDEXES},
     "lab_files": {"schema": LAB_FILE_SCHEMA, "indexes": LAB_FILE_INDEXES},
 }
-
-

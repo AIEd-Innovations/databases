@@ -144,6 +144,30 @@ def test_curriculum_agent_may_revise_its_draft(curriculum_db, db):
     assert db["labs"].find_one({"lab_id": "lab-01"})["version"] == 2
 
 
+@pytest.mark.parametrize("status", ["approved", "pending", "needs_changes"])
+def test_curriculum_agent_cannot_set_a_step_status(curriculum_db, status):
+    """curriculum-designer#13: approving a step, or resetting later ones, is
+    written as Role.INSTRUCTOR."""
+    curriculum_db.labs.insert_one(FACTORIES["labs"]())
+    with pytest.raises(PermissionError_, match="refused"):
+        curriculum_db.labs.update_one({"lab_id": "lab-01"}, {"$set": {"spec_status": status}})
+
+
+def test_instructor_approves_one_step_at_a_time(curriculum_db, instructor_db, db):
+    curriculum_db.labs.insert_one(FACTORIES["labs"](spec_status="pending", quiz_status="pending",
+                                                    rubric_status="pending"))
+    instructor_db.labs.update_one({"lab_id": "lab-01"}, {"$set": {"spec_status": "approved"}})
+    instructor_db.labs.update_one(
+        {"lab_id": "lab-01"},
+        {"$set": {"quiz_status": "needs_changes"},
+         "$push": {"feedback_history": {"feedback": "Fewer questions", "requested_by": INSTRUCTOR_ID,
+                                        "requested_at": now(), "resulting_version": 2, "step": "quiz"}}},
+    )
+    lab = db["labs"].find_one({"lab_id": "lab-01"})
+    assert (lab["spec_status"], lab["quiz_status"], lab["approval_status"]) == ("approved", "needs_changes", "pending")
+    assert lab["feedback_history"][-1]["step"] == "quiz"
+
+
 def test_instructor_may_approve_a_lab(curriculum_db, instructor_db, db):
     curriculum_db.labs.insert_one(FACTORIES["labs"]())
     instructor_db.labs.update_one(

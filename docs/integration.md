@@ -205,6 +205,15 @@ from aied_db import Role, get_db, guarded
 db = guarded(get_db(), Role.CURRICULUM_AGENT, actor_id="curriculum_agent")
 ```
 
+Approval is the instructor's, whole or one step at a time:
+`approval_status`, `approved_by`, `approval_notes` and the per-step
+`spec_status`, `quiz_status`, `rubric_status` are refused to
+`Role.CURRICULUM_AGENT` (a new lab may only start them `pending`). The routes
+that write them (`/approve`, `/request-changes`, `/steps/{step}/approve`, and
+the reset to `pending` after a step changes) write those fields through a
+connection guarded as `Role.INSTRUCTOR`, with the instructor's id as
+`actor_id`, so the revision trail shows who approved what.
+
 and drop your own `scripts/init_db.py` and `scripts/check_db.py`. Until then,
 **tell Vishal before you change `services/schema.py`**, or our copy goes
 stale and the validator starts flip-flopping between deploys.
