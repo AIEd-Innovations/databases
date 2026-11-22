@@ -2,7 +2,7 @@
 
 # Collections
 
-The `aied` database: 26 collections, each with a `$jsonSchema` validator
+The `aied` database: 27 collections, each with a `$jsonSchema` validator
 and its indexes. Validation level is `moderate` by default — existing
 documents are left alone, new and changed ones are checked.
 
@@ -16,7 +16,7 @@ each collection's policy table is generated from `POLICY` in
 | `curriculum` | [lab_files](#lab_files), [labs](#labs) |
 | `participant_guardian` | [guardian_questions](#guardian_questions), [guardian_sessions](#guardian_sessions), [guardian_verifications](#guardian_verifications), [guardian_violations](#guardian_violations), [interactions](#interactions) |
 | `lab_companion` | [rag_documents](#rag_documents), [rag_queries](#rag_queries), [rag_vectors](#rag_vectors), [student_files](#student_files) |
-| `assessment` | [assessment_results](#assessment_results), [assignment_files](#assignment_files), [assignments](#assignments), [submission_files](#submission_files) |
+| `assessment` | [assessment_results](#assessment_results), [assignment_files](#assignment_files), [assignments](#assignments), [student_submissions](#student_submissions), [submission_files](#submission_files) |
 | `integrity` | [integrity_escalations](#integrity_escalations), [integrity_records](#integrity_records), [integrity_reports](#integrity_reports), [integrity_sessions](#integrity_sessions), [integrity_violations](#integrity_violations) |
 | `platform` | [agent_config_defaults](#agent_config_defaults), [agent_configs](#agent_configs), [revisions](#revisions) |
 
@@ -577,6 +577,7 @@ each collection's policy table is generated from `POLICY` in
 | `review_reasons` | array<string> |  |  |  |
 | `final_score` | double \\| int \\| null |  | `>= 0` | Set by an instructor; REPLACES score. 0..max_score |
 | `regrade_of` | string \\| null |  |  | The submission_id this result regrades; null for a first grading |
+| `student_submission_id` | string \\| null |  |  | The student_submissions.submission_id this result grades; null for work an instructor uploaded directly |
 | `regrade_instructions` | string |  |  | The instructor's notes to the grader for that regrade |
 | `instructor_notes` | string |  |  |  |
 | `reviewed_at` | date \\| null |  |  |  |
@@ -596,6 +597,7 @@ each collection's policy table is generated from `POLICY` in
 | `course_id_1_student_id_1_created_at_-1` |  | A student's results, newest first |
 | `course_id_1_assignment_id_1_created_at_-1` |  | One assignment's results |
 | `course_id_1_status_1_created_at_1` |  | The needs_review work queue, oldest first |
+| `course_id_1_student_submission_id_1_created_at_-1` |  | Which student submissions are graded, and their newest result |
 
 **Access**
 
@@ -681,6 +683,39 @@ each collection's policy table is generated from `POLICY` in
 | `instructor` | delete, find, insert, replace, update | all |
 | `student` | find | all |
 | `curriculum_agent` | find, insert | all |
+| `assessment_agent` | find | all |
+| `migration` | find, insert | all |
+
+### student_submissions
+
+| Field | Type | Required | Constraints | Notes |
+| --- | --- | --- | --- | --- |
+| `submission_id` | string | yes |  | UUID4 |
+| `student_id` | string | yes |  | users.id; always the submitter |
+| `assignment_id` | string | yes |  | assignments.assignment_id |
+| `course_id` | string | yes |  |  |
+| `attempt` | int | yes | `>= 1` | 1 for the first submission to an assignment; a resubmission is a new document with the next number, never an edit |
+| `files` | array<object> | yes | minItems `1` | What the student handed in; what grading reads |
+| `files[].filename` | string |  |  |  |
+| `files[].content` | string |  |  | The file as submitted |
+| `comment` | string |  |  | The student's note to the instructor |
+| `submitted_at` | date | yes |  |  |
+
+**Indexes**
+
+| Keys | Unique | Purpose |
+| --- | --- | --- |
+| `submission_id_1` | yes | Primary key; insert-only |
+| `course_id_1_student_id_1_assignment_id_1_attempt_1` | yes | One document per attempt; a race to submit twice fails instead of duplicating |
+| `course_id_1_assignment_id_1_submitted_at_-1` |  | The instructor's list of one assignment's submissions |
+
+**Access**
+
+| Role | May | Updatable fields |
+| --- | --- | --- |
+| `admin` | delete, find, insert, replace, update | all |
+| `instructor` | find | all |
+| `student` | find, insert | all |
 | `assessment_agent` | find | all |
 | `migration` | find, insert | all |
 

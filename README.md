@@ -2,7 +2,7 @@
 
 The shared MongoDB layer for the CSU-AIEIC **Agentic Design Lab Framework**.
 
-One database (`aied`), 26 collections, each with a `$jsonSchema` validator and
+One database (`aied`), 27 collections, each with a `$jsonSchema` validator and
 its indexes. Every agent in the [AIEd-Innovations](https://github.com/AIEd-Innovations)
 org reads and writes through this package instead of its own SQLite file, JSON
 folder or Cosmos container.
@@ -62,7 +62,7 @@ aied_db/
   agent_config.py AgentConfig: defaults <- course <- user
   schema/         one module per agent, merged into a registry in __init__.py
   stores/         MongoSystemStore, MongoParticipantStore, MongoGuardianStore
-  repos/          AssessmentRepo, IntegrityRepo, LabCompanionRepo
+  repos/          AssessmentRepo, SubmissionRepo, IntegrityRepo, LabCompanionRepo
   defaults.json   read-only factory settings for every agent (mode 444)
 scripts/          init_db.py, check_db.py, atlas_roles.py, migrate_sqlite.py, gen_docs.py
 docs/             integration.md, collections.md (GENERATED), open-questions.md
@@ -75,7 +75,7 @@ tests/            382 tests: mongomock, a $jsonSchema checker, SQLite parity
 | `curriculum` | labs, lab_files |
 | `participant_guardian` | interactions, guardian_sessions, guardian_questions, guardian_violations, guardian_verifications |
 | `lab_companion` | rag_documents, rag_vectors, student_files, rag_queries |
-| `assessment` | assignments, assignment_files, assessment_results, submission_files |
+| `assessment` | assignments, assignment_files, student_submissions, assessment_results, submission_files |
 | `integrity` | integrity_sessions, integrity_records, integrity_violations, integrity_escalations, integrity_reports |
 | `platform` | revisions, agent_config_defaults, agent_configs |
 
@@ -104,6 +104,15 @@ Humans write their own data. Agents cannot approve a lab, review a grade,
 resolve their own escalation, or change a setting.
 
 `POLICY` in `access.py` is the single place to change who can write what.
+
+## Student submissions
+
+Students submit through ui-student into `student_submissions`; instructors
+read them and grade through the assessment agent with their own API key; the
+grade lands in `assessment_results` pointing back with `student_submission_id`.
+Students write (insert-only) and read their own; instructors and the
+assessment agent read. See `SubmissionRepo` and
+[docs/integration.md](docs/integration.md#student-submissions-ui-student--ui-instructor--assessment_agent).
 
 ## Secrets
 
@@ -156,15 +165,14 @@ AIED_DB_ATLAS_TEST=1 MONGODB_DB=aied_smoke pytest tests/test_atlas_smoke.py -v
 
 ## Status
 
-**Live on Atlas** (MongoDB 8.0, `aied`) as of 2026-10-29. All 25 collections
-exist with current validators and their full index sets; the vector index is
-`READY` and queryable; the 22 factory settings are seeded.
+**Live on Atlas** (MongoDB 8.0, `aied`) as of 2026-11-22. All 27 collections
+exist with current validators and their full index sets, including
+`student_submissions` and `submission_files`; the vector index is `READY` and
+queryable; the 26 factory settings are seeded.
 
-**Not yet applied to Atlas:** the regrade fields on `assessment_results`, the
-new `submission_files` collection, the `assignment` settings scope (which
-replaces one `agent_configs` unique index), the 4 new assessment settings,
-and the per-step approval fields on `labs` (curriculum-designer#13). Run `python scripts/init_db.py` with cluster access to apply them; it drops the
-superseded index itself.
+**Not yet applied to Atlas:** the per-step approval fields on `labs`
+(curriculum-designer#13). Run `python scripts/init_db.py` with cluster access
+to apply them.
 
 Verified on the real server, not just mongomock: validators reject a bad
 document, the unique indexes hold, email uniqueness and lookup are

@@ -288,6 +288,20 @@ POLICY: dict[str, dict[Role, Permission]] = {
         Role.ASSESSMENT_AGENT: read_only(),
         Role.MIGRATION: append_only(),
     },
+    # The "submissions" store. ui-student writes, ui-instructor reads, and
+    # grading reads it through the assessment agent with the instructor's key.
+    "student_submissions": {
+        Role.ADMIN: full(),
+        # Hand in, and read back. Insert-only: a resubmission is a new attempt,
+        # so what was graded never changes underneath its result. OWNER_FIELD
+        # pins student_id; SubmissionRepo filters a student's reads to their own.
+        Role.STUDENT: append_only(),
+        # Read only: the instructor grades the work, never edits it.
+        Role.INSTRUCTOR: read_only(),
+        Role.ASSESSMENT_AGENT: read_only(),
+        Role.MIGRATION: append_only(),
+    },
+    # The "graded submissions" store.
     "assessment_results": {
         Role.ADMIN: full(),
         # The instructor's review sets these four and nothing else; a regrade
@@ -515,6 +529,7 @@ INSERT_RULES: dict[str, dict[Role, dict[str, frozenset]]] = {
 OWNER_FIELD: dict[tuple[str, Role], str] = {
     ("agent_configs", Role.STUDENT): "user_id",
     ("student_files", Role.STUDENT): "student_id",
+    ("student_submissions", Role.STUDENT): "student_id",
 }
 
 
